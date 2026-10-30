@@ -33,8 +33,9 @@ jobs:
             echo "::error::Add the MAPTILER_KEY repository secret before deploying."
             exit 1
           fi
-          mkdir -p dist
+          mkdir -p dist/data
           cp index.html styles.css script.js map-config.js dist/
+          cp data/ukraine-boundary.geojson dist/data/
           jq -cn --arg key "$MAPTILER_KEY" '{mapTilerKey:$key}' \
             | sed 's/^/window.PARKING_MAP_CONFIG = Object.freeze(/; s/$/);/' \
             > dist/map-config.js

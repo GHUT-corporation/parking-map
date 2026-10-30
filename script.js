@@ -5,7 +5,7 @@ import {
 } from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
 
 const MAPTILER_STYLE = "https://api.maptiler.com/maps/streets-v4/style.json";
-const UKRAINE_BOUNDARY_METADATA = "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM0/";
+const UKRAINE_BOUNDARY_URL = "./data/ukraine-boundary.geojson";
 const EMPTY_GEOJSON = { type: "FeatureCollection", features: [] };
 const statusPill = document.querySelector(".map-status");
 const statusText = document.querySelector("#map-status-text");
@@ -112,13 +112,9 @@ function supportsWebGL2() {
 }
 
 async function readUkraineBoundary() {
-  const metadataResponse = await fetch(UKRAINE_BOUNDARY_METADATA, { cache: "force-cache" });
-  if (!metadataResponse.ok) throw new Error(`Дані кордону України: HTTP ${metadataResponse.status}.`);
-  const metadata = await metadataResponse.json();
-  if (!metadata.gjDownloadURL) throw new Error("У відповіді geoBoundaries немає посилання на GeoJSON.");
-  const boundaryResponse = await fetch(metadata.gjDownloadURL, { cache: "force-cache" });
-  if (!boundaryResponse.ok) throw new Error(`GeoJSON кордону України: HTTP ${boundaryResponse.status}.`);
-  return normalizeBoundary(await boundaryResponse.json());
+  const response = await fetch(UKRAINE_BOUNDARY_URL, { cache: "force-cache" });
+  if (!response.ok) throw new Error(`Локальні дані кордону України: HTTP ${response.status}.`);
+  return normalizeBoundary(await response.json());
 }
 
 function applyUkraineOnlyStyle(map, boundary, mask) {
