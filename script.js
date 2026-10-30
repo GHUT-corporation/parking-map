@@ -5,6 +5,8 @@ import {
 } from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
 
 const MAPTILER_STYLE = "https://api.maptiler.com/maps/streets-v4/style.json";
+const MAPTILER_ROAD_SOURCE = "maptiler_planet_v4";
+const MAPTILER_ROAD_SOURCE_LAYER = "road";
 const UKRAINE_BOUNDARY_URL = "./data/ukraine-boundary.geojson";
 const EMPTY_GEOJSON = { type: "FeatureCollection", features: [] };
 const statusPill = document.querySelector(".map-status");
@@ -119,59 +121,65 @@ async function readUkraineBoundary() {
 
 function applyUkraineOnlyStyle(map, boundary, mask) {
   const styleLayers = map.getStyle().layers ?? [];
-  const roadDefinition = styleLayers.find((layer) => layer["source-layer"] === "transportation");
-  if (!roadDefinition) throw new Error("У стилі MapTiler не знайдено векторний шар дорожньої мережі transportation.");
-  const roadSource = roadDefinition.source;
-  if (!roadSource || !map.getSource(roadSource)) throw new Error("MapTiler не завантажив джерело дорожніх векторних тайлів.");
+  const roadSource = map.getSource(MAPTILER_ROAD_SOURCE);
+  if (!roadSource) throw new Error(`MapTiler vector source "${MAPTILER_ROAD_SOURCE}" is missing.`);
+
+  const roadLayers = styleLayers.filter((layer) =>
+    layer.source === MAPTILER_ROAD_SOURCE &&
+    layer["source-layer"] === MAPTILER_ROAD_SOURCE_LAYER &&
+    layer.type === "line",
+  );
+  if (!roadLayers.length) {
+    throw new Error(`MapTiler style has no line layers for source-layer "${MAPTILER_ROAD_SOURCE_LAYER}".`);
+  }
+  const malformedRoadLayers = roadLayers.filter((layer) => !layer.paint?.["line-width"]);
+  if (malformedRoadLayers.length) {
+    throw new Error(`Road layers are missing zoom/class line-width styling: ${malformedRoadLayers.map(({ id }) => id).join(", ")}`);
+  }
 
   for (const layer of styleLayers) {
     if (layer.type === "background") {
       map.setPaintProperty(layer.id, "background-color", "#080F25");
-    } else if (map.getLayer(layer.id)) {
-      map.setLayoutProperty(layer.id, "visibility", "none");
     }
   }
 
-  map.addSource("ukraine-boundary", { type: "geojson", data: boundary });
-  map.addSource("ukraine-mask", { type: "geojson", data: mask });
-  const roadGroups = [
-    { id: "road-major", classes: ["motorway", "trunk", "primary"], minzoom: 4, widths: [4, 0.55, 8, 0.85, 12, 1.35, 16, 2.2, 20, 3.2] },
-    { id: "road-secondary", classes: ["secondary"], minzoom: 6, widths: [6, 0.35, 9, 0.55, 13, 1, 17, 1.7, 20, 2.3] },
-    { id: "road-tertiary", classes: ["tertiary"], minzoom: 8, widths: [8, 0.3, 11, 0.48, 15, 0.9, 18, 1.4, 20, 1.8] },
-    { id: "road-minor", classes: ["minor"], minzoom: 10, widths: [10, 0.25, 13, 0.45, 16, 0.8, 20, 1.4] },
-    { id: "road-service", classes: ["service", "track"], minzoom: 13, widths: [13, 0.3, 16, 0.55, 18, 0.85, 20, 1.1] },
-    { id: "road-path", classes: ["path", "pedestrian", "cycleway", "footway"], minzoom: 15, widths: [15, 0.25, 17, 0.45, 20, 0.75] },
-  ];
-  map.addLayer({
-    id: "ukraine-territory", type: "fill", source: "ukraine-boundary",
-    paint: { "fill-color": "#2B325E", "fill-opacity": 1 },
-  });
-  for (const group of roadGroups) {
+  for (const layer of roadLayers) {
+    // Keep MapTiler's class filters, zoom stops, bridge/tunnel order and road casing.
+    map.setPaintProperty(layer.id, "line-color", "#BABABA");
+  }
+
+  if (map.getSource("ukraine-boundary")) {
+    map.getSource("ukraine-boundary").setData(boundary);
+  } else {
+    map.addSource("ukraine-boundary", { type: "geojson", data: boundary });
+  }
+  if (map.getSource("ukraine-mask")) {
+    map.getSource("ukraine-mask").setData(mask);
+  } else {
+    map.addSource("ukraine-mask", { type: "geojson", data: mask });
+  }
+
+  const firstMapLayer = styleLayers.find((layer) => layer.type !== "background");
+  if (!map.getLayer("ukraine-territory")) {
     map.addLayer({
-      id: group.id,
-      type: "line",
-      source: roadSource,
-      "source-layer": "transportation",
-      minzoom: group.minzoom,
-      filter: ["in", ["get", "class"], ["literal", group.classes]],
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": "#BABABA",
-        "line-opacity": 0.94,
-        "line-width": ["interpolate", ["linear"], ["zoom"], ...group.widths],
-      },
+      id: "ukraine-territory", type: "fill", source: "ukraine-boundary",
+      paint: { "fill-color": "#2B325E", "fill-opacity": 1 },
+    }, firstMapLayer?.id);
+  }
+  if (!map.getLayer("outside-ukraine")) {
+    map.addLayer({
+      id: "outside-ukraine", type: "fill", source: "ukraine-mask",
+      paint: { "fill-color": "#080F25" },
     });
   }
-  map.addLayer({
-    id: "outside-ukraine", type: "fill", source: "ukraine-mask",
-    paint: { "fill-color": "#080F25" },
-  });
-  map.addLayer({
-    id: "ukraine-outline", type: "line", source: "ukraine-boundary",
-    paint: { "line-color": "#E3E8F5", "line-width": 1.1, "line-opacity": 0.95 },
-  });
+  if (!map.getLayer("ukraine-outline")) {
+    map.addLayer({
+      id: "ukraine-outline", type: "line", source: "ukraine-boundary",
+      paint: { "line-color": "#E3E8F5", "line-width": 1.1, "line-opacity": 0.95 },
+    });
+  }
 
-  return roadSource;
+  return MAPTILER_ROAD_SOURCE;
 }
 
 async function startMap() {
