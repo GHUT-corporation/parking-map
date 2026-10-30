@@ -127,6 +127,68 @@ function supportsWebGL2() {
   }
 }
 
+function rewriteExpressionGet(expression, field, replacement) {
+  if (!Array.isArray(expression)) return expression;
+  if (
+    expression[0] === "to-number" &&
+    expression.length === 3 &&
+    Array.isArray(expression[1]) &&
+    expression[1][0] === "get" &&
+    expression[1][1] === field
+  ) return expression;
+  if (expression.length === 2 && expression[0] === "get" && expression[1] === field) {
+    return replacement();
+  }
+  return expression.map((item) => rewriteExpressionGet(item, field, replacement));
+}
+
+function transformMapTilerStyle(_previousStyle, nextStyle) {
+  if (!Array.isArray(nextStyle?.layers)) return nextStyle;
+
+  let changed = false;
+  const layers = nextStyle.layers.map((layer) => {
+    let transformedLayer = layer;
+
+    if (layer.source === MAPTILER_ROAD_SOURCE && MAPTILER_POI_SOURCE_LAYERS.has(layer["source-layer"])) {
+      transformedLayer = {
+        ...transformedLayer,
+        layout: { ...transformedLayer.layout, visibility: "none" },
+      };
+      changed = true;
+    }
+
+    if (layer.id === "Sea labels" && layer.layout?.["text-size"]) {
+      const textSize = rewriteExpressionGet(layer.layout["text-size"], "lenght", () => ["get", "length"]);
+      if (JSON.stringify(textSize) !== JSON.stringify(layer.layout["text-size"])) {
+        transformedLayer = {
+          ...transformedLayer,
+          layout: { ...transformedLayer.layout, "text-size": textSize },
+        };
+        changed = true;
+      }
+    }
+
+    if (layer.id === "Disputed country labels" && layer.paint?.["text-opacity"]) {
+      const textOpacity = rewriteExpressionGet(
+        layer.paint["text-opacity"],
+        "rank",
+        () => ["to-number", ["get", "rank"], 0],
+      );
+      if (JSON.stringify(textOpacity) !== JSON.stringify(layer.paint["text-opacity"])) {
+        transformedLayer = {
+          ...transformedLayer,
+          paint: { ...transformedLayer.paint, "text-opacity": textOpacity },
+        };
+        changed = true;
+      }
+    }
+
+    return transformedLayer;
+  });
+
+  return changed ? { ...nextStyle, layers } : nextStyle;
+}
+
 async function readUkraineBoundary() {
   const response = await fetch(UKRAINE_BOUNDARY_URL, { cache: "force-cache" });
   if (!response.ok) throw new Error(`Локальні дані кордону України: HTTP ${response.status}.`);
@@ -173,10 +235,6 @@ function applyUkraineOnlyStyle(map, boundary, mask) {
   for (const layer of roadLayers) {
     // Keep MapTiler's class filters, zoom stops, bridge/tunnel order and road casing.
     map.setPaintProperty(layer.id, "line-color", "#BABABA");
-  }
-
-  for (const layer of poiLayers) {
-    map.setLayoutProperty(layer.id, "visibility", "none");
   }
 
   if (map.getSource("ukraine-boundary")) {
@@ -228,6 +286,7 @@ async function startMap() {
     const map = new MapLibreMap({
       container: "interactive-map",
       style: styleUrl,
+      transformStyle: transformMapTilerStyle,
       center: [31.0, 48.5],
       zoom: 4.5,
       minZoom: 3.3,
@@ -238,6 +297,13 @@ async function startMap() {
       touchPitch: false,
       cooperativeGestures: false,
       fadeDuration: 120,
+    });
+
+    // Preserve MapTiler's intentional blank and text-only fallback for records with no shield length.
+    const transparentFallbackIds = new Set([" ", "transportation:road_"]);
+    map.setMissingStyleImageResolver((id) => {
+      if (!transparentFallbackIds.has(id) || map.hasImage(id)) return;
+      map.addImage(id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) });
     });
 
     map.addControl(new NavigationControl({ showCompass: false, showZoom: true }), "top-right");
