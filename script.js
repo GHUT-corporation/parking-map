@@ -130,11 +130,15 @@ function supportsWebGL2() {
 function rewriteExpressionGet(expression, field, replacement) {
   if (!Array.isArray(expression)) return expression;
   if (
-    expression[0] === "to-number" &&
+    expression[0] === "coalesce" &&
     expression.length === 3 &&
     Array.isArray(expression[1]) &&
-    expression[1][0] === "get" &&
-    expression[1][1] === field
+    expression[1][0] === "to-number" &&
+    expression[1].length === 2 &&
+    Array.isArray(expression[1][1]) &&
+    expression[1][1][0] === "get" &&
+    expression[1][1][1] === field &&
+    expression[2] === 0
   ) return expression;
   if (expression.length === 2 && expression[0] === "get" && expression[1] === field) {
     return replacement();
@@ -158,7 +162,11 @@ function transformMapTilerStyle(_previousStyle, nextStyle) {
     }
 
     if (layer.id === "Sea labels" && layer.layout?.["text-size"]) {
-      const textSize = rewriteExpressionGet(layer.layout["text-size"], "lenght", () => ["get", "length"]);
+      const textSize = rewriteExpressionGet(
+        layer.layout["text-size"],
+        "lenght",
+        () => ["coalesce", ["to-number", ["get", "length"]], 0],
+      );
       if (JSON.stringify(textSize) !== JSON.stringify(layer.layout["text-size"])) {
         transformedLayer = {
           ...transformedLayer,
@@ -172,7 +180,7 @@ function transformMapTilerStyle(_previousStyle, nextStyle) {
       const textOpacity = rewriteExpressionGet(
         layer.paint["text-opacity"],
         "rank",
-        () => ["to-number", ["get", "rank"], 0],
+        () => ["coalesce", ["to-number", ["get", "rank"]], 0],
       );
       if (JSON.stringify(textOpacity) !== JSON.stringify(layer.paint["text-opacity"])) {
         transformedLayer = {
