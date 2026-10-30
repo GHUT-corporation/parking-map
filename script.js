@@ -94,6 +94,19 @@ function readMapTilerKey() {
   return key.trim();
 }
 
+function supportsWebGL2() {
+  if (!("WebGL2RenderingContext" in window)) return false;
+  try {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("webgl2", { failIfMajorPerformanceCaveat: false });
+    if (!context) return false;
+    context.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readUkraineBoundary() {
   const metadataResponse = await fetch(UKRAINE_BOUNDARY_METADATA, { cache: "force-cache" });
   if (!metadataResponse.ok) throw new Error(`Дані кордону України: HTTP ${metadataResponse.status}.`);
@@ -165,8 +178,8 @@ async function startMap() {
   try {
     setStatus("Підключення MapTiler");
     const mapTilerKey = readMapTilerKey();
-    if (!maplibregl.supported({ failIfMajorPerformanceCaveat: false })) {
-      throw new Error("Цей браузер не підтримує WebGL, потрібний для відображення карти.");
+    if (!supportsWebGL2()) {
+      throw new Error("Цей браузер або пристрій не підтримує WebGL2, потрібний для відображення карти.");
     }
     setStatus("Завантаження меж України");
     const { data: boundary, outerRings } = await readUkraineBoundary();
