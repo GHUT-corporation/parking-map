@@ -7,6 +7,20 @@ import {
 const MAPTILER_STYLE = "https://api.maptiler.com/maps/streets-v4/style.json";
 const MAPTILER_ROAD_SOURCE = "maptiler_planet_v4";
 const MAPTILER_ROAD_SOURCE_LAYER = "road";
+const MAPTILER_POI_SOURCE_LAYERS = new Set([
+  "poi_accommodation",
+  "poi_culture",
+  "poi_education",
+  "poi_food",
+  "poi_healthcare",
+  "poi_public",
+  "poi_shopping",
+  "poi_sport",
+  "poi_station",
+  "poi_tourism",
+  "poi_transport",
+  "street_furniture",
+]);
 const UKRAINE_BOUNDARY_URL = "./data/ukraine-boundary.geojson";
 const EMPTY_GEOJSON = { type: "FeatureCollection", features: [] };
 const statusPill = document.querySelector(".map-status");
@@ -137,6 +151,19 @@ function applyUkraineOnlyStyle(map, boundary, mask) {
     throw new Error(`Road layers are missing zoom/class line-width styling: ${malformedRoadLayers.map(({ id }) => id).join(", ")}`);
   }
 
+  const poiLayers = styleLayers.filter((layer) =>
+    layer.source === MAPTILER_ROAD_SOURCE &&
+    MAPTILER_POI_SOURCE_LAYERS.has(layer["source-layer"]),
+  );
+  if (!poiLayers.length) {
+    throw new Error("MapTiler Streets style contains no recognized POI source layers.");
+  }
+  const protectedLayers = new Set(["road", "road_label", "road_exit"]);
+  const accidentalRoadLayers = poiLayers.filter((layer) => protectedLayers.has(layer["source-layer"]));
+  if (accidentalRoadLayers.length) {
+    throw new Error(`Refusing to hide road layers: ${accidentalRoadLayers.map(({ id }) => id).join(", ")}`);
+  }
+
   for (const layer of styleLayers) {
     if (layer.type === "background") {
       map.setPaintProperty(layer.id, "background-color", "#080F25");
@@ -146,6 +173,10 @@ function applyUkraineOnlyStyle(map, boundary, mask) {
   for (const layer of roadLayers) {
     // Keep MapTiler's class filters, zoom stops, bridge/tunnel order and road casing.
     map.setPaintProperty(layer.id, "line-color", "#BABABA");
+  }
+
+  for (const layer of poiLayers) {
+    map.setLayoutProperty(layer.id, "visibility", "none");
   }
 
   if (map.getSource("ukraine-boundary")) {
