@@ -1,4 +1,8 @@
-import * as maplibregl from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
+import {
+  LngLatBounds,
+  Map as MapLibreMap,
+  NavigationControl,
+} from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
 
 const MAPTILER_STYLE = "https://api.maptiler.com/maps/streets-v4/style.json";
 const UKRAINE_BOUNDARY_METADATA = "https://www.geoboundaries.org/api/current/gbOpen/UKR/ADM0/";
@@ -73,7 +77,7 @@ function makeWorldMask(outerRings) {
 }
 
 function boundsFor(geometry) {
-  const bounds = new maplibregl.LngLatBounds();
+  const bounds = new LngLatBounds();
   const visit = (coordinates) => {
     if (typeof coordinates?.[0] === "number") {
       bounds.extend(coordinates);
@@ -186,7 +190,7 @@ async function startMap() {
     const mask = makeWorldMask(outerRings);
     const bounds = boundsFor(boundary.geometry);
     const styleUrl = `${MAPTILER_STYLE}?key=${encodeURIComponent(mapTilerKey)}`;
-    const map = new maplibregl.Map({
+    const map = new MapLibreMap({
       container: "interactive-map",
       style: styleUrl,
       center: [31.0, 48.5],
@@ -201,7 +205,7 @@ async function startMap() {
       fadeDuration: 120,
     });
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false, showZoom: true }), "top-right");
+    map.addControl(new NavigationControl({ showCompass: false, showZoom: true }), "top-right");
     let sourceHasLoaded = false;
     map.on("error", (event) => {
       const error = event.error;
