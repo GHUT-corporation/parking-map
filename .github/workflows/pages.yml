@@ -29,17 +29,58 @@ jobs:
         env:
           MAPTILER_KEY: ${{ secrets.MAPTILER_KEY }}
         run: |
+          set -euo pipefail
           if [ -z "$MAPTILER_KEY" ]; then
             echo "::error::Add the MAPTILER_KEY repository secret before deploying."
             exit 1
           fi
+
+          # Start from an empty artifact directory so a previous or tracked config cannot survive.
+          rm -rf dist
           mkdir -p dist/data
-          cp index.html styles.css script.js map-config.js dist/
+          cp index.html styles.css script.js dist/
           cp data/ukraine-boundary.geojson dist/data/
           jq -cn --arg key "$MAPTILER_KEY" '{mapTilerKey:$key}' \
             | sed 's/^/window.PARKING_MAP_CONFIG = Object.freeze(/; s/$/);/' \
             > dist/map-config.js
           touch dist/.nojekyll
+
+          # Validate the generated browser config without logging its contents or the key.
+          node <<'NODE'
+          const fs = require("node:fs");
+          const source = fs.readFileSync("dist/map-config.js", "utf8");
+          const prefix = "window.PARKING_MAP_CONFIG = Object.freeze(";
+          const suffix = ");";
+          if (!source.startsWith(prefix) || !source.trimEnd().endsWith(suffix)) {
+            console.error("Generated map-config.js has an unexpected format.");
+            process.exit(1);
+          }
+          let config;
+          try {
+            config = JSON.parse(source.trim().slice(prefix.length, -suffix.length));
+          } catch {
+            console.error("Generated map-config.js is not valid JSON configuration.");
+            process.exit(1);
+          }
+          if (typeof config.mapTilerKey !== "string" || config.mapTilerKey.trim().length === 0) {
+            console.error("Generated map-config.js does not contain a non-empty key.");
+            process.exit(1);
+          }
+          console.log("Generated map-config.js is valid; MapTiler key present (value hidden).");
+          NODE
+          unset MAPTILER_KEY
+
+          test -s dist/index.html
+          test -s dist/styles.css
+          test -s dist/script.js
+          test -s dist/map-config.js
+          test -s dist/data/ukraine-boundary.geojson
+          if git ls-files --error-unmatch dist/map-config.js >/dev/null 2>&1; then
+            echo "::error::Generated map-config.js must remain outside the Git source tree."
+            exit 1
+          fi
+          echo "Pages artifact files:"
+          find dist -type f -printf '%P\n' | sort
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
