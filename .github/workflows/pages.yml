@@ -39,6 +39,7 @@ jobs:
           rm -rf dist
           mkdir -p dist/data
           cp index.html styles.css script.js dist/
+          cp favicon.ico dist/
           cp data/ukraine-boundary.geojson dist/data/
           jq -cn --arg key "$MAPTILER_KEY" '{mapTilerKey:$key}' \
             | sed 's/^/window.PARKING_MAP_CONFIG = Object.freeze(/; s/$/);/' \
@@ -73,6 +74,7 @@ jobs:
           test -s dist/index.html
           test -s dist/styles.css
           test -s dist/script.js
+          test -s dist/favicon.ico
           test -s dist/map-config.js
           test -s dist/data/ukraine-boundary.geojson
           if git ls-files --error-unmatch dist/map-config.js >/dev/null 2>&1; then
