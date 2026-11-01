@@ -2,7 +2,7 @@
 <html lang="uk">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#181924" />
     <meta name="description" content="Мапа паркування та корисні інструменти для водіїв." />
     <title>Паркування — мапа</title>
@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20261101-regional-poi" />
+    <link rel="stylesheet" href="./styles.css?v=20261101-mobile-ui" />
   </head>
   <body>
     <main class="app-shell">
@@ -22,15 +22,21 @@
             <div id="interactive-map" class="map-canvas" role="application" aria-label="Інтерактивна карта України"></div>
             <div id="map-error" class="map-error" role="alert" hidden></div>
           <section class="navigation-panel" aria-label="Навігація" hidden>
-            <div class="navigation-details"><strong id="nav-destination">Пункт призначення не вибрано</strong><span id="nav-summary">Маршрут з’явиться після вибору місця й дозволу на геолокацію.</span><span id="nav-next"></span></div>
+            <div class="navigation-details">
+              <strong id="nav-destination">Пункт призначення не вибрано</strong><span id="nav-summary">Маршрут з’явиться після вибору місця й дозволу на геолокацію.</span>
+              <span id="nav-maneuver" class="mobile-only maneuver-icon" aria-hidden="true">•</span>
+              <div class="navigation-instruction"><strong id="nav-street" class="mobile-only"></strong><span id="nav-next"></span></div>
+              <div class="mobile-only navigation-metrics"><strong id="nav-turn-distance"></strong><span id="nav-duration"></span></div>
+            </div>
             <div class="navigation-actions">
-              <button id="nav-start" type="button" disabled>Почати навігацію</button>
-              <button id="nav-recenter" type="button" hidden>До мене</button>
+              <button id="nav-start" type="button" disabled><span class="desktop-only">Почати навігацію</span><span class="mobile-only">➤&nbsp; Поїхати</span></button>
+              <button id="nav-recenter" type="button" hidden><span class="desktop-only">До мене</span><span class="mobile-only">➤&nbsp; Стежити</span></button>
               <button id="nav-stop" type="button" hidden>Завершити навігацію</button>
-              <button id="nav-clear" type="button" hidden>Скасувати пункт</button>
+              <button id="nav-clear" type="button" hidden><span class="desktop-only">Скасувати пункт</span><span class="mobile-only">×&nbsp; Скасувати</span></button>
             </div>
           </section>
             <div class="map-location-controls"><button id="nav-location" type="button" title="Моє місцеперебування" aria-label="Моє місцеперебування">⌖</button></div>
+            <button id="map-compass" class="mobile-only map-compass" type="button" aria-label="Повернути карту на північ" title="Повернути карту на північ"><span class="compass-north">Пн</span><svg viewBox="0 0 30 40" aria-hidden="true"><path d="M15 1 27 23 15 19 3 23Z" fill="#F24974"/><path d="m15 39 12-16-12-4-12 4Z" fill="#F4F4FF"/></svg></button>
             <p id="nav-status" class="map-nav-notice" role="status" aria-live="polite" hidden></p>
           </div>
         </div>
@@ -41,28 +47,29 @@
         </footer>
 
         <aside class="tools-panel" aria-label="Інструменти">
+          <button class="mobile-tools-toggle mobile-only" type="button" aria-expanded="false" aria-controls="poi-tools" aria-label="Показати категорії POI"><span aria-hidden="true">P</span><span aria-hidden="true">⌄</span></button>
           <div class="tools-heading">
             <p class="eyebrow">ШВИДКИЙ ДОСТУП</p>
             <h2>Інструменти</h2>
           </div>
-          <nav class="tool-list" aria-label="Розділи сайту">
-            <button class="tool-button" type="button" data-poi="parking" aria-pressed="false" disabled>
+          <nav id="poi-tools" class="tool-list" aria-label="Категорії POI">
+            <button class="tool-button" type="button" data-poi="parking" aria-label="Парковки" title="Парковки" aria-pressed="false" disabled>
               <span class="tool-icon symbol-icon" aria-hidden="true">P</span>
               <span class="tool-label">Парковки</span><span class="tool-chevron">›</span>
             </button>
-            <button class="tool-button" type="button" data-poi="paid" aria-pressed="false" disabled>
+            <button class="tool-button" type="button" data-poi="paid" aria-label="Платні парковки" title="Платні парковки" aria-pressed="false" disabled>
               <span class="tool-icon symbol-icon" aria-hidden="true">$</span>
               <span class="tool-label">Платні парковки</span><span class="tool-chevron">›</span>
             </button>
-            <button class="tool-button" type="button" data-poi="charging" aria-pressed="false" disabled>
+            <button class="tool-button" type="button" data-poi="charging" aria-label="Електрозаправки" title="Електрозаправки" aria-pressed="false" disabled>
               <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M13.5 2.8 5.8 13h5.6l-.9 8.2L18.2 11h-5.6l.9-8.2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
               <span class="tool-label">Електрозаправки</span><span class="tool-chevron">›</span>
             </button>
-            <button class="tool-button" type="button" data-poi="fuel" aria-pressed="false" disabled>
+            <button class="tool-button" type="button" data-poi="fuel" aria-label="Заправки" title="Заправки" aria-pressed="false" disabled>
               <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 20V6.5A2.5 2.5 0 0 1 7.5 4h6A2.5 2.5 0 0 1 16 6.5V20M3.5 20h14M8 8h5v4H8zM16 9h1.5l2 2.5V17a1.5 1.5 0 0 1-3 0v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 11.5h-2" stroke="currentColor" stroke-width="1.7"/></svg></span>
               <span class="tool-label">Заправки</span><span class="tool-chevron">›</span>
             </button>
-            <button class="tool-button" type="button" data-poi="repair" aria-pressed="false" disabled>
+            <button class="tool-button" type="button" data-poi="repair" aria-label="СТО" title="СТО" aria-pressed="false" disabled>
               <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="12" rx="6.5" ry="9" stroke="currentColor" stroke-width="1.7"/><ellipse cx="12" cy="12" rx="2.7" ry="4.7" stroke="currentColor" stroke-width="1.7"/><path d="m7 5 2 1m6 0 2-1M5.6 9l2.1.4m8.6 0 2.1-.4M5.5 15l2.2-.5m8.6 0 2.2.5M7 19l2-1m6 0 2 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
               <span class="tool-label">СТО</span><span class="tool-chevron">›</span>
             </button>
@@ -74,6 +81,6 @@
 
     </main>
     <script src="./map-config.js"></script>
-    <script type="module" src="./script.js?v=20261101-regional-poi"></script>
+    <script type="module" src="./script.js?v=20261101-mobile-ui"></script>
   </body>
 </html>

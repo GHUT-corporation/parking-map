@@ -26,8 +26,23 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
   const ui = Object.fromEntries(["destination", "summary", "next", "status", "location", "start", "recenter", "stop", "clear"]
     .map((name) => [name, document.querySelector(`#nav-${name}`)]));
   const key = window.PARKING_MAP_CONFIG?.geoapifyKey;
+  const workspace = document.querySelector(".workspace");
+  const mobile = Object.fromEntries(["maneuver", "street", "turn-distance", "duration"]
+    .map((name) => [name, document.querySelector(`#nav-${name}`)]));
+  const tools = document.querySelector(".tools-panel");
+  const toolsToggle = document.querySelector(".mobile-tools-toggle");
+  const toggleTools = () => {
+    const expanded = tools.classList.toggle("tools-expanded");
+    toolsToggle.setAttribute("aria-expanded", String(expanded));
+    toolsToggle.setAttribute("aria-label", expanded ? "Сховати категорії POI" : "Показати категорії POI");
+  };
+  toolsToggle.addEventListener("click", toggleTools);
+  const headerObserver = new ResizeObserver(([entry]) => {
+    workspace.style.setProperty("--mobile-header-height", `${entry.target.getBoundingClientRect().height}px`);
+  });
+  headerObserver.observe(document.querySelector(".navigation-details"));
   let position, accuracy, heading, destination, destinationMarker, userMarker;
-  let watchId, navigating = false, follow = false, controller, route, coords = [], steps = [];
+  let watchId, navigating = false, starting = false, follow = false, controller, route, coords = [], steps = [], routeDistances = [];
   let lastReroute = 0, offRouteSince = 0, disposed = false, lastAngle = 0, compassExpiry, routingRetryAt = 0;
   const arrow = document.createElement("div");
   arrow.className = "navigation-arrow";
@@ -61,7 +76,17 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     }
   }
 
-  function notice(message) { ui.status.textContent = message; ui.status.hidden = false; }
+  function notice(message, level = "info") { ui.status.textContent = message; ui.status.dataset.level = level; ui.status.hidden = false; }
+  function syncMode() {
+    workspace.classList.toggle("has-destination", !!destination);
+    workspace.dataset.navigationState = !destination ? "browse" : navigating ? "navigating" : route ? "ready" : "planning";
+    if (!destination) {
+      tools.classList.remove("tools-expanded");
+      toolsToggle.setAttribute("aria-expanded", "false");
+      toolsToggle.setAttribute("aria-label", "Показати категорії POI");
+    }
+  }
+  syncMode();
   function renderHeading() {
     arrow.classList.toggle("directed", Number.isFinite(heading));
     if (!Number.isFinite(heading)) return;
@@ -88,7 +113,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     const p = [value.coords.longitude, value.coords.latitude];
     if (!validPoint(p) || value.coords.accuracy > 1000 || value.coords.accuracy <= 0 ||
         !insideUkraine(p, boundary.geometry)) {
-      notice("Точність місцеперебування недостатня. Зачекайте кращого GPS-сигналу.");
+      notice("Точність місцеперебування недостатня. Зачекайте кращого GPS-сигналу.", "warning");
       return;
     }
     position = p; accuracy = value.coords.accuracy;
@@ -123,12 +148,12 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
   function locationError(error) {
     const text = error.code === 1 ? "Доступ до геолокації відхилено." :
       error.code === 3 ? "Час очікування GPS вичерпано." : "Не вдалося визначити місцеперебування.";
-    notice(text);
+    notice(text, "error");
     heading = undefined; renderHeading();
-    if (navigating && error.code === 1) { stop(); notice(text); }
+    if (navigating && error.code === 1) { stop(); notice(text, "error"); }
   }
   function locate() {
-    if (!navigator.geolocation || !isSecureContext) { notice("Геолокація доступна лише у HTTPS-браузері з підтримкою GPS."); return; }
+    if (!navigator.geolocation || !isSecureContext) { notice("Геолокація доступна лише у HTTPS-браузері з підтримкою GPS.", "error"); return; }
     navigator.geolocation.getCurrentPosition((value) => {
       setPosition(value);
       if (position) map.easeTo({ center: position, zoom: Math.max(map.getZoom(), 14), duration: 600 });
@@ -153,14 +178,20 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     ui.start.disabled = true;
     ui.next.textContent = "";
     ui.summary.textContent = position ? "Розрахунок маршруту…" : "Спершу визначте місцеперебування.";
+    mobile.street.textContent = label;
+    mobile.maneuver.textContent = "•";
+    mobile["turn-distance"].textContent = "—";
+    mobile.duration.textContent = "";
+    ui.next.textContent = position ? "Розрахунок маршруту…" : "Потрібен дозвіл на геолокацію.";
+    syncMode();
     if (position) calculate();
     else locate();
   }
   async function calculate(isReroute = false) {
     if (!position || !destination) return;
-    if (!key) { notice("Для маршруту потрібен ключ Geoapify з обмеженням за доменом у налаштуваннях провайдера."); return; }
+    if (!key) { notice("Для маршруту потрібен ключ Geoapify з обмеженням за доменом у налаштуваннях провайдера.", "error"); return; }
     if (Date.now() < routingRetryAt) {
-      notice("Geoapify обмежив запити. Зачекайте перед повторним розрахунком маршруту.");
+      notice("Geoapify обмежив запити. Зачекайте перед повторним розрахунком маршруту.", "warning");
       return;
     }
     controller?.abort();
@@ -172,6 +203,8 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
       url.searchParams.set("waypoints", `${position[1]},${position[0]}|${destination[1]},${destination[0]}`);
       url.searchParams.set("mode", "drive");
       url.searchParams.set("lang", "uk");
+      // Geoapify supplies actual road names and maneuver types with these details.
+      url.searchParams.set("details", "instruction_details,route_details");
       url.searchParams.set("apiKey", key);
       const response = await fetch(url, { signal: request.signal });
       if (!response.ok) {
@@ -192,11 +225,19 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
       routingRetryAt = 0;
       route = feature;
       coords = feature.geometry.coordinates.flat();
-      steps = feature.properties.legs?.flatMap((leg) => leg.steps ?? []) ?? [];
+      let offset = 0;
+      steps = (feature.properties.legs ?? []).flatMap((leg, index) => {
+        const result = (leg.steps ?? []).map(step => ({ ...step, routeIndex: offset + step.from_index }));
+        offset += feature.geometry.coordinates[index]?.length ?? 0;
+        return result;
+      });
+      routeDistances = [0];
+      for (let i = 1; i < coords.length; i++) routeDistances.push(routeDistances[i - 1] + meters(coords[i - 1], coords[i]));
       map.getSource("navigation-route").setData({ type: "FeatureCollection", features: [feature] });
       setRouteVisible(true);
       ui.summary.textContent = `${readableDistance(feature.properties.distance)} · близько ${Math.ceil(feature.properties.time / 60)} хв`;
       ui.start.disabled = false;
+      syncMode();
       notice("Маршрут розраховано за OSM. Перевіряйте актуальні дорожні обмеження самостійно.");
       if (!isReroute) {
         const bounds = new LngLatBounds(); coords.forEach((p) => bounds.extend(p));
@@ -208,9 +249,14 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
       route = null; coords = []; steps = [];
       map.getSource("navigation-route").setData(empty);
       ui.summary.textContent = "Маршрут недоступний";
+      ui.start.disabled = true;
+      ui.next.textContent = "Маршрут недоступний. Перевірте повідомлення на карті.";
+      mobile["turn-distance"].textContent = "—";
+      mobile.duration.textContent = "";
+      syncMode();
       notice(error.name === "AbortError" ? "Час очікування Geoapify вичерпано." :
         error instanceof TypeError ? "Не вдалося зв’язатися з Geoapify. Перевірте мережу та CORS-обмеження ключа." :
-          error.message || "Помилка сервісу маршрутизації.");
+          error.message || "Помилка сервісу маршрутизації.", "error");
     } finally { clearTimeout(timeout); }
   }
   function nearest() {
@@ -225,14 +271,22 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
       if (distance < closest) { closest = distance; index = i; closestAlong = along + length * t; }
       along += length; total += length;
     }
-    return { distance: closest, index, remaining: Math.max(0, total - closestAlong) };
+    return { distance: closest, index, remaining: Math.max(0, total - closestAlong), travelled: closestAlong };
   }
   function updateProgress() {
     if (!route || !position) return;
     const progress = nearest();
     if (navigating) ui.summary.textContent = `Залишилося ${readableDistance(progress.remaining)}`;
-    const step = steps.find((item) => item.from_index > progress.index && item.instruction?.text);
-    ui.next.textContent = step?.instruction?.text ?? "";
+    const step = steps.find((item) => item.routeIndex > progress.index && item.instruction?.text);
+    ui.next.textContent = step?.instruction?.text ?? "Покрокові інструкції недоступні.";
+    const streets = step?.instruction?.streets;
+    mobile.street.textContent = step?.name || (Array.isArray(streets) ? streets.filter(s => typeof s === "string").join(", ") : "") || ui.destination.textContent;
+    mobile.maneuver.textContent = maneuverSymbol(step?.instruction?.type);
+    const distance = routeDistances[step?.routeIndex];
+    mobile["turn-distance"].textContent = Number.isFinite(distance) ? readableDistance(Math.max(0, distance - progress.travelled)) : "—";
+    const total = routeDistances.at(-1);
+    const remainingTime = navigating && total > 0 ? route.properties.time * progress.remaining / total : route.properties.time;
+    mobile.duration.textContent = `≈ ${Math.max(1, Math.ceil(remainingTime / 60))} хв`;
   }
   function maybeReroute() {
     if (!position || accuracy > 80 || !route) return;
@@ -241,18 +295,23 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     if (!offRouteSince) offRouteSince = Date.now();
     if (Date.now() - offRouteSince < 15000 || Date.now() - lastReroute < 60000) return;
     lastReroute = Date.now(); offRouteSince = 0;
-    notice("Ви відхилилися від маршруту. Перерахунок…");
+    notice("Ви відхилилися від маршруту. Перерахунок…", "warning");
     calculate(true);
   }
   async function start() {
+    if (navigating || starting) return;
     if (!position || !destination || !route || !navigator.geolocation) { notice("Спершу визначте позицію й побудуйте маршрут."); return; }
+    starting = true;
     if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
       try { if (await DeviceOrientationEvent.requestPermission() !== "granted") compassHeading = undefined; } catch { compassHeading = undefined; }
     }
+    starting = false;
+    if (disposed || !destination || !route) return;
     window.addEventListener("deviceorientationabsolute", orientation);
     window.addEventListener("deviceorientation", orientation);
     navigating = true; follow = true;
     ui.start.hidden = true; ui.stop.hidden = false; ui.recenter.hidden = false;
+    syncMode(); updateProgress();
     watchId = navigator.geolocation.watchPosition(setPosition, locationError,
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
     map.easeTo({ center: position, zoom: Math.max(map.getZoom(), 16), duration: 600 });
@@ -266,10 +325,11 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     clearTimeout(compassExpiry);
     compassHeading = undefined; heading = undefined; renderHeading();
     ui.start.hidden = false; ui.stop.hidden = true; ui.recenter.hidden = true;
+    syncMode();
     notice("Навігацію завершено. Відстеження GPS зупинено.");
   }
   function clear() {
-    stop(); controller?.abort(); destination = undefined; route = null; coords = []; steps = [];
+    stop(); controller?.abort(); controller = undefined; destination = undefined; route = null; coords = []; steps = [];
     destinationMarker?.remove(); destinationMarker = undefined;
     map.getSource("navigation-route").setData(empty);
     setRouteVisible(false);
@@ -278,6 +338,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     ui.next.textContent = ""; ui.start.disabled = true; ui.clear.hidden = true;
     document.querySelector(".navigation-panel").hidden = true;
     ui.status.hidden = true;
+    syncMode();
   }
   ui.location.addEventListener("click", locate);
   ui.start.addEventListener("click", start);
@@ -286,6 +347,21 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
   ui.recenter.addEventListener("click", () => { if (position) { follow = true; map.easeTo({ center: position, duration: 500 }); } });
   map.on("contextmenu", (event) => setDestination(event.lngLat.toArray()));
   map.on("dragstart", () => { if (navigating) follow = false; });
-  map.on("remove", () => { disposed = true; stop(); controller?.abort(); destinationMarker?.remove(); userMarker?.remove(); });
+  map.on("rotate", renderHeading);
+  map.on("remove", () => {
+    disposed = true; stop(); controller?.abort(); destinationMarker?.remove(); userMarker?.remove();
+    headerObserver.disconnect(); toolsToggle.removeEventListener("click", toggleTools); map.off("rotate", renderHeading);
+  });
   return { setDestination };
+}
+
+export function maneuverSymbol(type) {
+  if (type?.startsWith("DestinationReached")) return "⚑";
+  if (["TurnAroundLeft", "TurnAroundRight"].includes(type)) return "↶";
+  if (type === "Roundabout") return "↻";
+  if (["Right", "SharpRight", "ExitRight"].includes(type)) return "↱";
+  if (["Left", "SharpLeft", "ExitLeft"].includes(type)) return "↰";
+  if (["SlightRight", "StayRight", "MergeRight"].includes(type)) return "↗";
+  if (["SlightLeft", "StayLeft", "MergeLeft"].includes(type)) return "↖";
+  return ["Straight", "StartAt", "StartAtRight", "StartAtLeft", "Merge"].includes(type) ? "↑" : "•";
 }

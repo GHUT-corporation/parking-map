@@ -1,5 +1,5 @@
 import { setupPoi } from "./poi.js?v=20261101-regional-poi";
-import { setupNavigation } from "./navigation.js?v=20261101-regional-poi";
+import { setupNavigation } from "./navigation.js?v=20261101-mobile-ui";
 import {
   LngLatBounds,
   Map as MapLibreMap,
@@ -280,6 +280,30 @@ function applyUkraineOnlyStyle(map, boundary, mask) {
   return MAPTILER_ROAD_SOURCE;
 }
 
+function setupMobilePalette(map) {
+  const media = window.matchMedia("(max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px)");
+  const changes = [];
+  // These source-layer names were checked against the actual Streets v4 JSON.
+  // Capture all original expressions so switching back restores the desktop style.
+  for (const layer of map.getStyle().layers) {
+    if (layer.source !== MAPTILER_ROAD_SOURCE) continue;
+    const sourceLayer = layer["source-layer"];
+    const add = (property, color) => changes.push({ id: layer.id, property, original: map.getPaintProperty(layer.id, property) ?? null, color });
+    if (layer.type === "fill") add("fill-color", sourceLayer === "water" ? "#454560" : sourceLayer === "building" ? "#2D2D49" : sourceLayer === "pedestrian" ? "#34354E" : "#23263E");
+    if (layer.type === "fill" && sourceLayer === "building") add("fill-outline-color", "#414361");
+    if (layer.type === "fill-extrusion" && sourceLayer === "building") add("fill-extrusion-color", "#2D2D49");
+    if (layer.type === "line" && ["waterway", "pathway", "railway"].includes(sourceLayer)) add("line-color", sourceLayer === "waterway" ? "#585878" : "#7C7D99");
+    if (layer.type === "symbol" && layer.layout?.["text-field"]) {
+      add("text-color", "#D9D5E9"); add("text-halo-color", "#25263F");
+    }
+  }
+  const apply = () => {
+    for (const { id, property, original, color } of changes) map.setPaintProperty(id, property, media.matches ? color : original);
+  };
+  apply(); media.addEventListener("change", apply);
+  map.once("remove", () => media.removeEventListener("change", apply));
+}
+
 async function startMap() {
   try {
     setStatus("Підключення MapTiler");
@@ -315,6 +339,23 @@ async function startMap() {
     });
 
     map.addControl(new NavigationControl({ showCompass: false, showZoom: true }), "top-right");
+    // CSS switches the existing UI; this observer only resizes the same map canvas.
+    let resizeFrame;
+    const viewportObserver = new ResizeObserver(() => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => map.resize());
+    });
+    viewportObserver.observe(document.querySelector(".map-viewport"));
+    const compass = document.querySelector("#map-compass");
+    const renderCompass = () => compass.style.setProperty("--north-angle", `${-map.getBearing()}deg`);
+    const resetNorth = () => map.rotateTo(0, { duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 300 });
+    compass.addEventListener("click", resetNorth);
+    map.on("rotate", renderCompass);
+    renderCompass();
+    map.once("remove", () => {
+      viewportObserver.disconnect(); cancelAnimationFrame(resizeFrame);
+      compass.removeEventListener("click", resetNorth); map.off("rotate", renderCompass);
+    });
     let sourceHasLoaded = false;
     map.on("error", (event) => {
       const error = event.error;
@@ -335,6 +376,7 @@ async function startMap() {
       try {
         setStatus("Налаштування карти");
         const roadSource = applyUkraineOnlyStyle(map, boundary, mask);
+        setupMobilePalette(map);
         map.on("sourcedata", (event) => {
           if (event.sourceId === roadSource && event.isSourceLoaded) {
             sourceHasLoaded = true;
