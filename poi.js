@@ -77,7 +77,9 @@ export function setupPoi(map, boundary, Popup, onDestination) {
   };
   visit(boundary.geometry.coordinates);
   const cache = new Map();
-  let timer, controller, popup, revision = 0, nextRequestAt = 0, disposed = false;
+  const liveFeatures = new Map();
+  let timer, retryTimer, controller, popup, revision = 0, nextRequestAt = 0,
+    blockedUntil = 0, consecutiveFailures = 0, requiresManualRetry = false, disposed = false;
   const handlers = [];
   const listen = (...args) => { map.on(...args); handlers.push(args); };
   const sourceId = (key) => `parking-map-poi-${key}`;
@@ -149,6 +151,26 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       map.setLayoutProperty(sourceId(key), "visibility", active.has(key) ? "visible" : "none");
     }
   }
+  function showAvailable(keys) {
+    let count = 0;
+    const bounds = map.getBounds();
+    for (const key of keys) {
+      const combined = new Map();
+      for (const feature of liveFeatures.get(key) ?? []) {
+        if (bounds.contains(feature.geometry.coordinates)) combined.set(feature.properties.osmId, feature);
+      }
+      for (const feature of localData?.features ?? []) {
+        if (feature.properties?.category === key &&
+            bounds.contains(feature.geometry.coordinates) &&
+            insideUkraine(feature.geometry.coordinates, boundary.geometry)) {
+          combined.set(feature.properties.osmId, feature);
+        }
+      }
+      map.getSource(sourceId(key)).setData({ type: "FeatureCollection", features: [...combined.values()] });
+      count += combined.size;
+    }
+    return count;
+  }
   function dailyRequestCount() {
     try {
       const saved = JSON.parse(localStorage.getItem(DAILY_COUNTER_KEY) || "null");
@@ -165,10 +187,11 @@ export function setupPoi(map, boundary, Popup, onDestination) {
   function schedule() {
     revision += 1;
     clearTimeout(timer);
+    clearTimeout(retryTimer);
     controller?.abort();
     popup?.remove();
     status.textContent = hint();
-    timer = setTimeout(load, Math.max(700, nextRequestAt - Date.now()));
+    timer = setTimeout(load, 700);
   }
   async function load() {
     if (disposed) return;
@@ -177,41 +200,45 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     const version = revision;
     await localPromise;
     if (version !== revision || disposed) return;
-    const center = map.getCenter();
-    const withinLocalArea = localData?.metadata.bbox.some(([west, south, east, north]) =>
-      center.lng >= west && center.lng <= east && center.lat >= south && center.lat <= north);
-    if (withinLocalArea) {
-      let count = 0;
-      for (const key of keys) {
-        const features = localData.features.filter((feature) =>
-          feature.properties?.category === key &&
-          insideUkraine(feature.geometry.coordinates, boundary.geometry));
-        map.getSource(sourceId(key)).setData({ type: "FeatureCollection", features });
-        count += features.length;
-      }
-      status.textContent = `Львів · OSM: ${count} об’єктів у двох ділянках центру. Дані за межами цих ділянок можуть бути відсутніми.`;
+    const bounds = map.getBounds();
+    const availableCount = showAvailable(keys);
+    const fullyCovered = localData?.metadata.bbox.some(([west, south, east, north]) =>
+      bounds.getWest() >= west && bounds.getEast() <= east &&
+      bounds.getSouth() >= south && bounds.getNorth() <= north);
+    if (fullyCovered) {
+      status.textContent = `Львів · OSM: точок ${availableCount}. Видима область повністю покрита локальними даними.`;
       return;
     }
-    const bounds = map.getBounds();
     // Limit queries to the visible bbox intersected with Ukraine's extent.
     const box = [Math.max(extent[0], Math.floor(bounds.getSouth() * 50) / 50),
       Math.max(extent[1], Math.floor(bounds.getWest() * 50) / 50),
       Math.min(extent[2], Math.ceil(bounds.getNorth() * 50) / 50),
       Math.min(extent[3], Math.ceil(bounds.getEast() * 50) / 50)];
     if (box[0] >= box[2] || box[1] >= box[3]) {
-      keys.forEach((key) => map.getSource(sourceId(key)).setData(empty()));
       status.textContent = "У цій області немає території України.";
       return;
     }
     if ((box[2] - box[0]) * (box[3] - box[1]) > 0.6) {
       status.textContent = "Наблизьте карту: область завелика для завантаження POI.";
-      keys.forEach((key) => map.getSource(sourceId(key)).setData(empty()));
       return;
     }
     const signature = `${keys.join(",")}:${box.map((n) => n.toFixed(5)).join(",")}`;
     let elements = cache.get(signature)?.elements;
     if (Date.now() - (cache.get(signature)?.time ?? 0) > 300000) elements = undefined;
     if (!elements) {
+      if (requiresManualRetry) {
+        status.textContent = "Overpass призупинено після повторних помилок. Збережені точки доступні; через 5 хвилин перемкніть категорію для нової спроби.";
+        return;
+      }
+      if (Date.now() < nextRequestAt && Date.now() >= blockedUntil) {
+        status.textContent = "Локальні точки доступні. Overpass тимчасово очікує перед наступним запитом.";
+        timer = setTimeout(() => { if (revision === version && !disposed) load(); }, nextRequestAt - Date.now());
+        return;
+      }
+      if (Date.now() < blockedUntil) {
+        status.textContent = "Overpass тимчасово недоступний. Збережені точки залишаються на карті; нові запити призупинено на кілька хвилин.";
+        return;
+      }
       if (dailyRequestCount() >= DAILY_REQUEST_LIMIT) {
         status.textContent = "Досягнуто денний ліміт запитів POI в цьому браузері. Уже завантажені точки доступні; спробуйте завтра.";
         return;
@@ -232,14 +259,28 @@ export function setupPoi(map, boundary, Popup, onDestination) {
         const result = await response.json();
         if (result.remark || !Array.isArray(result.elements)) throw new Error("Неповна відповідь Overpass");
         elements = result.elements;
+        consecutiveFailures = 0;
         cache.set(signature, { time: Date.now(), elements });
         if (cache.size > 16) cache.delete(cache.keys().next().value);
       } catch (error) {
         if (version !== revision || disposed) return;
         const httpStatus = Number(error?.message.match(/^HTTP (\d+)$/)?.[1]);
-        const backoff = httpStatus === 429 || httpStatus === 406 || error?.name === "TimeoutError" || error?.name === "AbortError" ? 30000 : 15000;
+        consecutiveFailures += 1;
+        const backoff = httpStatus === 502 || httpStatus === 429 || httpStatus === 406 ||
+          error?.name === "TimeoutError" || error?.name === "AbortError" ? 30000 : 15000;
         nextRequestAt = Date.now() + backoff;
-        if (httpStatus === 406) {
+        if ((httpStatus === 502 && consecutiveFailures >= 2) || consecutiveFailures >= 3) {
+          blockedUntil = Date.now() + 5 * 60 * 1000;
+          requiresManualRetry = true;
+        }
+        if (httpStatus === 502) {
+          status.textContent = blockedUntil > Date.now()
+            ? "Overpass відповів HTTP 502 повторно. Нові запити призупинено; через 5 хвилин перемкніть категорію. Наявні точки залишаються на карті."
+            : "Overpass тимчасово відповів HTTP 502. Наявні точки залишаються на карті; одна повторна спроба через 30 секунд.";
+          if (blockedUntil <= Date.now()) {
+            retryTimer = setTimeout(() => { if (revision === version && !disposed) load(); }, backoff);
+          }
+        } else if (httpStatus === 406) {
           status.textContent = "Overpass відхилив запит (HTTP 406). Зачекайте щонайменше 30 секунд і спробуйте знову; уже завантажені точки збережено.";
         } else if (httpStatus === 429) {
           status.textContent = "Overpass обмежив частоту запитів (HTTP 429). Зачекайте щонайменше 30 секунд; уже завантажені точки збережено.";
@@ -252,12 +293,11 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       } finally { clearTimeout(timeout); }
     }
     if (version !== revision || disposed) return;
-    let count = 0;
     for (const key of keys) {
       const data = toFeatures(elements, key, boundary.geometry);
-      map.getSource(sourceId(key)).setData(data);
-      count += data.features.length;
+      liveFeatures.set(key, data.features);
     }
+    const count = showAvailable(keys);
     status.textContent = `Об’єктів: ${count}. ${hint()} Парковки без fee — з невідомою оплатою.`;
   }
   const clicks = buttons.map((button) => {
@@ -266,6 +306,10 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     button.querySelector(".tool-icon").style.color = CATEGORIES[key].color;
     const click = () => {
       if (active.has(key)) active.delete(key); else active.add(key);
+      if (requiresManualRetry && Date.now() >= blockedUntil) {
+        requiresManualRetry = false;
+        consecutiveFailures = 0;
+      }
       button.classList.toggle("active", active.has(key));
       button.setAttribute("aria-pressed", String(active.has(key)));
       updateVisibility(); schedule();
@@ -273,10 +317,10 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     button.addEventListener("click", click);
     return [button, click];
   });
-  listen("movestart", () => { revision += 1; controller?.abort(); clearTimeout(timer); popup?.remove(); });
+  listen("movestart", () => { revision += 1; controller?.abort(); clearTimeout(timer); clearTimeout(retryTimer); popup?.remove(); });
   listen("moveend", schedule);
   map.once("remove", () => {
-    disposed = true; revision += 1; clearTimeout(timer); controller?.abort(); popup?.remove(); cache.clear();
+    disposed = true; revision += 1; clearTimeout(timer); clearTimeout(retryTimer); controller?.abort(); popup?.remove(); cache.clear(); liveFeatures.clear();
     handlers.forEach((args) => map.off(...args));
     clicks.forEach(([button, click]) => button.removeEventListener("click", click));
   });
