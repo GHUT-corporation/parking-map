@@ -1,7 +1,9 @@
+import { setupPoi } from "./poi.js?v=20261101-lviv";
 import {
   LngLatBounds,
   Map as MapLibreMap,
   NavigationControl,
+  Popup,
 } from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
 
 const MAPTILER_STYLE = "https://api.maptiler.com/maps/streets-v4/style.json";
@@ -289,14 +291,13 @@ async function startMap() {
     setStatus("Завантаження меж України");
     const { data: boundary, outerRings } = await readUkraineBoundary();
     const mask = makeWorldMask(outerRings);
-    const bounds = boundsFor(boundary.geometry);
     const styleUrl = `${MAPTILER_STYLE}?key=${encodeURIComponent(mapTilerKey)}`;
     const map = new MapLibreMap({
       container: "interactive-map",
       style: styleUrl,
       transformStyle: transformMapTilerStyle,
-      center: [31.0, 48.5],
-      zoom: 4.5,
+      center: [24.0297, 49.8397],
+      zoom: 13,
       minZoom: 3.3,
       maxZoom: 20,
       renderWorldCopies: false,
@@ -335,7 +336,6 @@ async function startMap() {
       try {
         setStatus("Налаштування карти");
         const roadSource = applyUkraineOnlyStyle(map, boundary, mask);
-        map.fitBounds(bounds, { padding: { top: 72, right: 54, bottom: 72, left: 54 }, maxZoom: 5.3, duration: 0 });
         map.on("sourcedata", (event) => {
           if (event.sourceId === roadSource && event.isSourceLoaded) {
             sourceHasLoaded = true;
@@ -348,6 +348,7 @@ async function startMap() {
             showMapError("Стиль завантажено, але векторні тайли доріг не надійшли. Перевірте HTTP-помилки MapTiler у консолі браузера.");
           }
         });
+        setupPoi(map, boundary, Popup);
         map.resize();
       } catch (error) {
         console.error("Не вдалося оформити карту України:", error);

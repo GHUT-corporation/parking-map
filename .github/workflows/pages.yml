@@ -38,9 +38,10 @@ jobs:
           # Start from an empty artifact directory so a previous or tracked config cannot survive.
           rm -rf dist
           mkdir -p dist/data
-          cp index.html styles.css script.js dist/
+          cp index.html styles.css script.js poi.js dist/
           cp favicon.ico dist/
           cp data/ukraine-boundary.geojson dist/data/
+          cp data/lviv-poi.geojson dist/data/
           jq -cn --arg key "$MAPTILER_KEY" '{mapTilerKey:$key}' \
             | sed 's/^/window.PARKING_MAP_CONFIG = Object.freeze(/; s/$/);/' \
             > dist/map-config.js
@@ -74,9 +75,11 @@ jobs:
           test -s dist/index.html
           test -s dist/styles.css
           test -s dist/script.js
+          test -s dist/poi.js
           test -s dist/favicon.ico
           test -s dist/map-config.js
           test -s dist/data/ukraine-boundary.geojson
+          test -s dist/data/lviv-poi.geojson
           if git ls-files --error-unmatch dist/map-config.js >/dev/null 2>&1; then
             echo "::error::Generated map-config.js must remain outside the Git source tree."
             exit 1
