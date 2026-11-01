@@ -94,7 +94,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       id, type: "circle", source: id, minzoom: category.zoom,
       layout: { visibility: "none" },
       paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 4, 16, 6, 20, 8],
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 6, 13, 7, 16, 8, 20, 10],
         "circle-color": category.color, "circle-stroke-color": "#10182C",
         "circle-stroke-width": 2, "circle-opacity": 0.95,
       },
@@ -128,6 +128,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       routeButton.type = "button";
       routeButton.className = "popup-route-button";
       routeButton.textContent = "Прокласти маршрут";
+      add("Маршрут", "Координати буде передано Geoapify. Дорожні дані можуть бути неповними.");
       routeButton.addEventListener("click", () => {
         onDestination(feature.geometry.coordinates, props.name || category.label);
         popup?.remove();

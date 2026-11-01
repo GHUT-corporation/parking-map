@@ -1,4 +1,4 @@
-import { insideUkraine } from "./poi.js?v=20261101-overpass502";
+import { insideUkraine } from "./poi.js?v=20261101-mapcontrols";
 
 const ROUTING_URL = "https://api.geoapify.com/v1/routing";
 const empty = { type: "FeatureCollection", features: [] };
@@ -33,14 +33,15 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
   arrow.className = "navigation-arrow";
   arrow.innerHTML = '<span class="point"></span><span class="heading"></span>';
 
-  if (!map.getSource("navigation-route")) map.addSource("navigation-route", { type: "geojson", data: empty });
+  if (!map.getSource("navigation-route")) map.addSource("navigation-route", { type: "geojson", data: empty,
+    attribution: 'Powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>' });
   for (const [id, width, color] of [["navigation-outline", 10, "#0b315e"], ["navigation-line", 6, "#238BFF"]]) {
     if (!map.getLayer(id)) map.addLayer({ id, type: "line", source: "navigation-route",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: { "line-color": color, "line-width": width, "line-opacity": .95 } });
   }
 
-  function notice(message) { ui.status.textContent = message; }
+  function notice(message) { ui.status.textContent = message; ui.status.hidden = false; }
   function renderHeading() {
     arrow.classList.toggle("directed", Number.isFinite(heading));
     if (!Number.isFinite(heading)) return;
@@ -120,6 +121,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
       return;
     }
     destination = point;
+    document.querySelector(".navigation-panel").hidden = false;
     destinationMarker?.remove();
     const pin = document.createElement("span"); pin.textContent = "●"; pin.style.cssText = "color:#ff686f;font-size:32px;text-shadow:0 2px 5px #000";
     destinationMarker = new Marker({ element: pin, anchor: "bottom" }).setLngLat(point).addTo(map);
@@ -131,6 +133,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     ui.next.textContent = "";
     ui.summary.textContent = position ? "Розрахунок маршруту…" : "Спершу визначте місцеперебування.";
     if (position) calculate();
+    else locate();
   }
   async function calculate(isReroute = false) {
     if (!position || !destination) return;
@@ -250,9 +253,11 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     ui.destination.textContent = "Пункт призначення не вибрано";
     ui.summary.textContent = "Оберіть POI або точку на карті.";
     ui.next.textContent = ""; ui.start.disabled = true; ui.clear.hidden = true;
+    document.querySelector(".navigation-panel").hidden = true;
+    ui.status.hidden = true;
   }
   ui.location.addEventListener("click", locate);
-  ui.pick.addEventListener("click", () => { picking = true; notice("Натисніть на потрібне місце на карті."); });
+  ui.pick.addEventListener("click", () => { picking = true; notice("Виберіть місце. Координати маршруту буде передано Geoapify; дорожні дані можуть бути неповними."); });
   ui.start.addEventListener("click", start);
   ui.stop.addEventListener("click", stop);
   ui.clear.addEventListener("click", clear);

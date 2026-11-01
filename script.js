@@ -1,5 +1,5 @@
-import { setupPoi } from "./poi.js?v=20261101-overpass502";
-import { setupNavigation } from "./navigation.js?v=20261101-overpass502";
+import { setupPoi } from "./poi.js?v=20261101-mapcontrols";
+import { setupNavigation } from "./navigation.js?v=20261101-mapcontrols";
 import {
   LngLatBounds,
   Map as MapLibreMap,
