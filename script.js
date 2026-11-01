@@ -1,5 +1,5 @@
-import { setupPoi } from "./poi.js?v=20261101-mapcontrols";
-import { setupNavigation } from "./navigation.js?v=20261101-mapcontrols";
+import { setupPoi } from "./poi.js?v=20261101-lviv-expanded";
+import { setupNavigation } from "./navigation.js?v=20261101-lviv-expanded";
 import {
   LngLatBounds,
   Map as MapLibreMap,

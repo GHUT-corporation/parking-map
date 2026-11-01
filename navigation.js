@@ -1,4 +1,4 @@
-import { insideUkraine } from "./poi.js?v=20261101-mapcontrols";
+import { insideUkraine } from "./poi.js?v=20261101-lviv-expanded";
 
 const ROUTING_URL = "https://api.geoapify.com/v1/routing";
 const empty = { type: "FeatureCollection", features: [] };
@@ -23,11 +23,11 @@ export function routingFailure(status, retryAfter) {
 }
 
 export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
-  const ui = Object.fromEntries(["destination", "summary", "next", "status", "location", "pick", "start", "recenter", "stop", "clear"]
+  const ui = Object.fromEntries(["destination", "summary", "next", "status", "location", "start", "recenter", "stop", "clear"]
     .map((name) => [name, document.querySelector(`#nav-${name}`)]));
   const key = window.PARKING_MAP_CONFIG?.geoapifyKey;
   let position, accuracy, heading, destination, destinationMarker, userMarker;
-  let watchId, navigating = false, follow = false, picking = false, controller, route, coords = [], steps = [];
+  let watchId, navigating = false, follow = false, controller, route, coords = [], steps = [];
   let lastReroute = 0, offRouteSince = 0, disposed = false, lastAngle = 0, compassExpiry, routingRetryAt = 0;
   const arrow = document.createElement("div");
   arrow.className = "navigation-arrow";
@@ -251,18 +251,17 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     destinationMarker?.remove(); destinationMarker = undefined;
     map.getSource("navigation-route").setData(empty);
     ui.destination.textContent = "Пункт призначення не вибрано";
-    ui.summary.textContent = "Оберіть POI або точку на карті.";
+    ui.summary.textContent = "Оберіть POI або місце на карті правою кнопкою миші.";
     ui.next.textContent = ""; ui.start.disabled = true; ui.clear.hidden = true;
     document.querySelector(".navigation-panel").hidden = true;
     ui.status.hidden = true;
   }
   ui.location.addEventListener("click", locate);
-  ui.pick.addEventListener("click", () => { picking = true; notice("Виберіть місце. Координати маршруту буде передано Geoapify; дорожні дані можуть бути неповними."); });
   ui.start.addEventListener("click", start);
   ui.stop.addEventListener("click", stop);
   ui.clear.addEventListener("click", clear);
   ui.recenter.addEventListener("click", () => { if (position) { follow = true; map.easeTo({ center: position, duration: 500 }); } });
-  map.on("click", (event) => { if (picking) { picking = false; setDestination(event.lngLat.toArray()); } });
+  map.on("contextmenu", (event) => setDestination(event.lngLat.toArray()));
   map.on("dragstart", () => { if (navigating) follow = false; });
   map.on("remove", () => { disposed = true; stop(); controller?.abort(); destinationMarker?.remove(); userMarker?.remove(); });
   return { setDestination };

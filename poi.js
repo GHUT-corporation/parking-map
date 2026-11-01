@@ -50,12 +50,39 @@ export function toFeatures(elements, key, geometry) {
   return { type: "FeatureCollection", features: [...unique.values()] };
 }
 
+// A viewport may span several adjacent local extracts; no single bbox needs to contain it.
+export function boundsCovered(bounds, boxes) {
+  const west = bounds.getWest(), east = bounds.getEast();
+  const south = bounds.getSouth(), north = bounds.getNorth();
+  if (![west, east, south, north].every(Number.isFinite) || west >= east || south >= north) return false;
+  const epsilon = 1e-9;
+  const xs = [west, east];
+  for (const [left, , right] of boxes) {
+    if (left > west && left < east) xs.push(left);
+    if (right > west && right < east) xs.push(right);
+  }
+  xs.sort((a, b) => a - b);
+  for (let i = 1; i < xs.length; i++) {
+    const x = (xs[i - 1] + xs[i]) / 2;
+    const spans = boxes.filter(([left, , right]) => left - epsilon <= x && x <= right + epsilon)
+      .map(([, bottom, , top]) => [bottom, top]).sort((a, b) => a[0] - b[0]);
+    let coveredUntil = south;
+    for (const [bottom, top] of spans) {
+      if (bottom > coveredUntil + epsilon) break;
+      coveredUntil = Math.max(coveredUntil, top);
+      if (coveredUntil >= north - epsilon) break;
+    }
+    if (coveredUntil < north - epsilon) return false;
+  }
+  return true;
+}
+
 export function setupPoi(map, boundary, Popup, onDestination) {
   const status = document.querySelector("#poi-status");
   const buttons = [...document.querySelectorAll("[data-poi]")];
   const active = new Set();
   let localData = null;
-  const localPromise = fetch("./data/lviv-poi.geojson", { cache: "force-cache" })
+  const localPromise = fetch("./data/lviv-poi.geojson?v=20261101-lviv-expanded", { cache: "force-cache" })
     .then((response) => {
       if (!response.ok) throw new Error(`Local POI HTTP ${response.status}`);
       return response.json();
@@ -203,9 +230,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     if (version !== revision || disposed) return;
     const bounds = map.getBounds();
     const availableCount = showAvailable(keys);
-    const fullyCovered = localData?.metadata.bbox.some(([west, south, east, north]) =>
-      bounds.getWest() >= west && bounds.getEast() <= east &&
-      bounds.getSouth() >= south && bounds.getNorth() <= north);
+    const fullyCovered = localData && boundsCovered(bounds, localData.metadata.bbox);
     if (fullyCovered) {
       status.textContent = `Львів · OSM: точок ${availableCount}. Видима область повністю покрита локальними даними.`;
       return;
