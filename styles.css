@@ -257,6 +257,11 @@ h2 { margin-bottom: 0; font-size: 14px; letter-spacing: -.35px; }
   .has-destination .symbol-icon { font-size: 25px; }
   .has-destination .poi-status { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 184px); left: 14px; right: 80px; }
   .has-destination .tools-panel:not(.tools-expanded) .poi-status { display: none; }
+  @media (max-width: 350px) {
+    .has-destination .tools-panel.tools-expanded { width: calc(100% - 28px); }
+    .has-destination .tools-expanded .tool-list { margin-top: 18px; }
+    .has-destination .map-compass { z-index: 5; }
+  }
   .has-destination .map-nav-notice { bottom: calc(env(safe-area-inset-bottom, 0px) + 145px); }
   @media (max-height: 500px) {
     :root { --mobile-dock-height: 80px; }

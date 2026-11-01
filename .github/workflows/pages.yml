@@ -47,6 +47,7 @@ jobs:
           cp favicon.ico dist/
           cp data/ukraine-boundary.geojson dist/data/
           cp data/lviv-poi.geojson dist/data/
+          cp data/lviv-charging-ocm.geojson dist/data/
           cp data/lviv-poi-audit.json data/lviv-poi-coverage.geojson dist/data/
           jq -cn --arg key "$MAPTILER_KEY" --arg route "$GEOAPIFY_KEY" '{mapTilerKey:$key,geoapifyKey:$route}' \
             | sed 's/^/window.PARKING_MAP_CONFIG = Object.freeze(/; s/$/);/' \
@@ -92,6 +93,7 @@ jobs:
           test -s dist/map-config.js
           test -s dist/data/ukraine-boundary.geojson
           test -s dist/data/lviv-poi.geojson
+          test -s dist/data/lviv-charging-ocm.geojson
           test -s dist/data/lviv-poi-audit.json
           test -s dist/data/lviv-poi-coverage.geojson
           if git ls-files --error-unmatch dist/map-config.js >/dev/null 2>&1; then

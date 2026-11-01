@@ -54,9 +54,9 @@ let browser, server;
     } });
   });
   const page = await context.newPage(); page.setDefaultTimeout(15000);
-  const errors = []; let localRequests = 0, routeRequests = 0, overpassRequests = 0;
+  const errors = [], warnings = []; let localRequests = 0, routeRequests = 0, overpassRequests = 0;
   page.on('pageerror', error => errors.push(redact(error.message)));
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(redact(msg.text())); });
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(redact(msg.text())); if(msg.type()==='warning')warnings.push(redact(msg.text())); });
   page.on('request', r => { if (r.url().includes('/data/lviv-poi.geojson')) localRequests++; });
   await context.route('https://overpass-api.de/**', r => { overpassRequests++; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"elements":[]}' }); });
   await context.route('https://api.geoapify.com/v1/routing**', r => {
@@ -76,7 +76,7 @@ let browser, server;
   const boxes = () => Object.fromEntries(['.map-panel', '.tools-panel', '.safety-alert'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return [s, { x: r.x, y: r.y, width: r.width, height: r.height }]; }));
   const paints = () => window.__map.getStyle().layers.filter(l => l.source === 'maptiler_planet_v4').map(l => ({ id: l.id, colors: ['fill-color', 'fill-outline-color', 'fill-extrusion-color', 'line-color', 'text-color', 'text-halo-color', 'line-width'].map(p => l.paint?.[p] ?? null) }));
   const widths = [];
-  for (const width of [360, 390, 430, 768, 1024, 1440]) {
+  for (const width of [320, 360, 375, 390, 430, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await until(page, () => Math.abs(document.querySelector('.map-viewport').getBoundingClientRect().width - document.querySelector('.maplibregl-canvas').getBoundingClientRect().width) <= 2);
     const state = await page.evaluate(() => {
@@ -105,6 +105,20 @@ let browser, server;
     await page.locator('[data-poi="' + k + '"]').click();
   }
   assert.equal(localRequests, 1); assert.equal(overpassRequests, 0);
+  const external = JSON.parse(fs.readFileSync(path.join(root, 'data/lviv-charging-ocm.geojson')));
+  for (const [index, feature] of external.features.entries()) {
+    await page.evaluate(p => { window.__map.jumpTo({ center: p, zoom: 17 }); }, feature.geometry.coordinates);
+    await until(page, async id => (await window.__map.getSource('parking-map-poi-charging').getData()).features.some(f => f.id === id), feature.id);
+    await page.waitForTimeout(300);
+    const point = await page.evaluate(p => { const q = window.__map.project(p); return { x: q.x, y: q.y }; }, feature.geometry.coordinates);
+    await page.mouse.click(point.x, point.y);
+    assert.ok((await page.locator('.poi-popup').innerText()).includes('Open Charge Map'));
+    if (index === 0) {
+      await page.locator('.popup-route-button').click();
+      await until(page, () => document.querySelector('.workspace').dataset.navigationState === 'ready');
+      await page.locator('#nav-clear').click();
+    }
+  }
   await page.locator('#nav-location').click(); await until(page, () => !!document.querySelector('.navigation-arrow'));
   await page.evaluate(() => { window.__map.jumpTo({ center: [24.0297, 49.8397], zoom: 14, bearing: 75 }); });
   assert.equal(await page.locator('#map-compass').evaluate(e => e.style.getPropertyValue('--north-angle')), '-75deg');
@@ -126,12 +140,32 @@ let browser, server;
   assert.match(await page.locator('#nav-turn-distance').innerText(), /м|км/);
   await page.locator('.mobile-tools-toggle').click();
   assert.equal(await page.locator('[data-poi]:visible').count(), 5);
+  await page.setViewportSize({width:320,height:844});
+  await until(page, () => document.querySelector('.tools-panel').getBoundingClientRect().width >= 246);
+  const compactButtons = await page.locator('[data-poi]').evaluateAll(buttons => buttons.map(b => ({width:b.getBoundingClientRect().width,height:b.getBoundingClientRect().height})));
+  assert.ok(compactButtons.every(b => b.width >= 44 && b.height >= 44), 'Expanded categories have 44px touch targets at 320px: '+JSON.stringify(compactButtons));
+  await page.setViewportSize({width:390,height:844});
   await page.locator('.mobile-tools-toggle').click();
   await page.waitForTimeout(700);
   await page.screenshot({ path: path.join(output, 'mobile-route-ready.png') });
   await page.locator('#nav-start').click();
   await until(page, () => document.querySelector('.workspace').dataset.navigationState === 'navigating');
   assert.equal((await page.evaluate(() => window.__gps.watches)), 1);
+  // Force full base-style replacement twice while navigation is active.
+  await page.evaluate(async () => {
+    const key=window.PARKING_MAP_CONFIG.mapTilerKey;
+    const response=await fetch('https://api.maptiler.com/maps/streets-v4/style.json?key='+encodeURIComponent(key));
+    if(!response.ok)throw new Error('Test base style unavailable');
+    window.__auditBaseStyle=await response.json();
+  });
+  for(let pass=0;pass<2;pass++){
+    await page.evaluate(() => { window.__map.setStyle(window.__auditBaseStyle,{diff:false}); });
+    await until(page, () => !!window.__map.getSource('navigation-route') && !!window.__map.getSource('parking-map-poi-charging'));
+    await until(page, async () => (await window.__map.getSource('navigation-route').getData()).features.length>0);
+    assert.equal(await page.locator('[data-poi].active').count(),5);
+    assert.equal((await page.evaluate(() => window.__gps.watches)),1);
+    assert.equal(localRequests,1);
+  }
   const routesBeforeResize = routeRequests;
   for (const size of [{ width: 844, height: 390 }, { width: 1440, height: 844 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(size); await page.waitForTimeout(250);
@@ -151,6 +185,15 @@ let browser, server;
   await page.evaluate(() => { window.__denyGPS = true; }); await page.locator('#nav-location').click();
   await until(page, () => document.querySelector('#nav-status').textContent.includes('відхилено'));
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ result: 'PASS', widths, categories: 5, localRequests, routeRequests, gps: await page.evaluate(() => window.__gps), compass: true, popup: true, cancel: true, resizePreservesNavigation: true, errors, screenshots: output }, null, 2));
+  assert.ok(warnings.every(w => !/Expected value|could not be loaded|SDF/i.test(w)), 'No style expression / sprite / SDF warnings: '+JSON.stringify(warnings));
+  const unavailable = await context.newPage();
+  await unavailable.route('**/data/lviv-charging-ocm.geojson**', r => r.fulfill({status:503,body:'Controlled unavailable source'}));
+  await unavailable.goto(origin + '/parking-map/', {waitUntil:'domcontentloaded'});
+  await unavailable.waitForFunction(() => !!window.__map?.getSource('parking-map-poi-charging'), null, {timeout:60000});
+  await unavailable.locator('[data-poi="charging"]').click();
+  await until(unavailable, () => document.querySelector('#poi-status').textContent.includes('OCM недоступні'));
+  assert.ok(await unavailable.evaluate(async () => (await window.__map.getSource('parking-map-poi-charging').getData()).features.length > 0));
+  await unavailable.close();
+  console.log(JSON.stringify({ result: 'PASS', widths, categories: 5, localRequests, routeRequests, gps: await page.evaluate(() => window.__gps), compass: true, popup: true, cancel: true, resizePreservesNavigation: true, styleReloads:2, errors, styleWarnings:warnings.filter(w=>/Expected value|could not be loaded|SDF/i.test(w)), screenshots: output }, null, 2));
 })().catch(error => { console.error('FAIL:', redact(error.stack || error.message)); process.exitCode = 1; })
   .finally(async () => { if (browser) await browser.close(); if (server) await new Promise(r => server.close(r)); });

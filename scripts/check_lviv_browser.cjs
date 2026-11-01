@@ -123,6 +123,9 @@ let browser, server;
     await page.locator('[data-poi="' + k + '"]').click();
   }
   const zoomChecks = [];
+  // Keep the backoff clock deterministic while software WebGL renders many tiles.
+  // Timer/backoff advancement itself is exercised in check_poi_audit.mjs.
+  await page.evaluate(() => { const now = Date.now(); Date.now = () => now; });
   for (const z of [10, 11, 12, 13]) {
     console.log('Checking zoom:', z);
     await page.evaluate(z => { window.__parkingTestMap.jumpTo({ zoom: z }); }, z); await page.waitForTimeout(900);

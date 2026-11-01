@@ -62,7 +62,11 @@ for (const tags of [{}, { fee: "no" }, { fee: "donation" }, { fee: "Per month" }
 for (const tags of [{ fee: "yes" }, { fee: "8 UAH per day" }, { charge: "20 UAH/hour" }, { charge: "2,50 EUR" }]) assert.equal(isPaidParking(tags), true);
 assert.equal(categoryFor({ amenity: "parking", access: "private" }), "parking");
 assert.equal(categoryFor({ shop: "tyres" }), null);
-assert.equal(categoryFor({ shop: "tyres", "service:vehicle:tyres": "yes" }), null);
+assert.equal(categoryFor({ shop: "tyres", "service:vehicle:tyres": "yes" }), "repair");
+assert.equal(categoryFor({ shop: "tyres", name: "Шини б/в з Європи" }), null);
+assert.equal(categoryFor({ shop: "tyres", name: "Шиномонтаж" }), "repair");
+assert.equal(categoryFor({ shop: "car", "service:vehicle:new_car_sales": "yes" }), null);
+assert.equal(categoryFor({ shop: "car", "service:vehicle:brakes": "yes" }), "repair");
 assert.equal(categoryFor({ shop: "tyres", "service:vehicle:tyres_repair": "yes" }), "repair");
 const bounds = ([w, s, e, n]) => ({ getWest: () => w, getSouth: () => s, getEast: () => e, getNorth: () => n });
 assert.ok(boundsCovered(bounds([23.76, 49.66, 24.34, 50.04]), data.metadata.bbox));

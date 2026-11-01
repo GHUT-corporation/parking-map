@@ -17,11 +17,12 @@ from shapely.geometry import Point, LineString, Polygon, box, mapping, shape
 from shapely import wkb
 from shapely.strtree import STRtree
 from shapely.ops import unary_union
+from data_tool_io import write_files
 
 BBOX = [23.75, 49.65, 24.35, 50.05]
 REGION = box(*BBOX)
 NAMES = {"Львів", "Винники", "Брюховичі", "Рудне", "Рудно", "Сокільники", "Зимна Вода", "Малехів", "Дубляни"}
-REPAIR_SERVICES = ("car_repair", "tyres_repair", "oil_change")
+REPAIR_SERVICES = ("car_repair", "tyres_repair", "oil_change", "tyres", "diagnostics", "brakes", "body_repair", "air_conditioning", "painting", "glass", "electrical", "muffler", "transmission", "motor", "alignment")
 SOURCE = "https://download.geofabrik.de/europe/ukraine-latest.osm.pbf"
 
 
@@ -29,7 +30,7 @@ def relevant(tags):
     return (tags.get("amenity") in {"parking", "parking_space", "charging_station", "fuel"}
             or tags.get("shop") in {"car_repair", "tyres"}
             or any(tags.get("service:vehicle:" + service) == "yes" for service in REPAIR_SERVICES)
-            or tags.get("site") == "parking")
+            or tags.get("site") == "parking" or tags.get("craft") == "car_repair")
 
 
 class Extract(osmium.SimpleHandler):
@@ -100,14 +101,14 @@ def extract(pbf, cache):
     with osmium.io.Reader(str(pbf)) as reader:
         timestamp = reader.header().get("osmosis_replication_timestamp")
     handler.apply_file(str(pbf), locations=True, filters=[osmium.filter.KeyFilter(
-        "amenity", "shop", "service:vehicle:car_repair", "service:vehicle:tyres_repair", "service:vehicle:oil_change", "site", "boundary", "place",
+        "amenity", "shop", "craft", "service:vehicle:car_repair", "service:vehicle:tyres_repair", "service:vehicle:oil_change", "site", "boundary", "place",
         "parking:left", "parking:right", "parking:both", "parking:lane:left", "parking:lane:right", "parking:lane:both")])
     raw = {"source": SOURCE, "snapshot": timestamp, "bbox": BBOX,
            "downloadedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
            "features": list(handler.features.values()), "boundaries": list(handler.boundaries.values()),
            "places": list(handler.places.values()), "sites": handler.sites,
            "streetWays": sorted(handler.street_ways), "invalid": sorted(handler.invalid)}
-    cache.write_text(json.dumps(raw, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    write_files({cache: json.dumps(raw, ensure_ascii=False, separators=(",", ":"))})
     return raw
 
 
@@ -129,7 +130,9 @@ def category(tags):
         return "charging"
     if tags.get("amenity") == "fuel":
         return "fuel"
-    if tags.get("shop") == "car_repair" or (tags.get("shop") in {"car", "car_parts", "tyres"} and
+    named_tyre_service = tags.get('shop') == 'tyres' and any(re.fullmatch(r'(шиномонтаж|шино монтаж|вулканізація|car tire repair)', str(tags.get(k,'')), re.I) for k in ('name','name:uk','name:en'))
+    explicit_repair = tags.get('service:vehicle:car_repair') == 'yes' and tags.get('shop') not in {'bicycle','motorcycle','motorcycle_repair'}
+    if tags.get("shop") == "car_repair" or tags.get('craft') == 'car_repair' or named_tyre_service or explicit_repair or (tags.get("shop") in {"car", "car_parts", "tyres"} and
             any(tags.get("service:vehicle:" + service) == "yes" for service in REPAIR_SERVICES)):
         return "repair"
     return None
@@ -251,7 +254,7 @@ def build(raw, baseline_path, pbf):
         "coverageAudit": "./lviv-poi-audit.json"}
     output = {"type": "FeatureCollection", "metadata": metadata, "features": features}
     target = root / "data/lviv-poi.geojson"
-    target.write_text(json.dumps(output, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    output_payload = json.dumps(output, ensure_ascii=False, separators=(",", ":"))
     new_ids = {f["id"] for f in features}
     audit = {"snapshot": raw["snapshot"], "processedBbox": BBOX,
         "before": dict(collections.Counter(f["properties"]["category"] for f in old.values())),
@@ -263,7 +266,7 @@ def build(raw, baseline_path, pbf):
                              "after": f["properties"]["category"]} for f in features if f["id"] in old and
                             old[f["id"]]["properties"]["category"] != f["properties"]["category"]],
         "retainedPreviousIds": len(new_ids & old.keys()), "removedPreviousIds": sorted(old.keys() - new_ids),
-        "beforeBytes": baseline_path.stat().st_size, "afterBytes": target.stat().st_size,
+        "beforeBytes": baseline_path.stat().st_size, "afterBytes": len(output_payload.encode('utf-8')),
         "administrativeCoverage": boundary_checks, "nestedSpaces": nested, "duplicates": duplicates,
         "siteGroups": site_groups, "unclassifiedCandidates": ignored,
         "streetWaysNotConvertedToMarkers": raw["streetWays"],
@@ -271,10 +274,11 @@ def build(raw, baseline_path, pbf):
         "correctedPreviousMarkerIds": corrected_markers,
         "standaloneSpaces": sum(f["properties"].get("amenity") == "parking_space" for f in features),
         "access": dict(collections.Counter(f["properties"].get("access", "unknown") for f in features))}
-    (root / "data/lviv-poi-audit.json").write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (root / "data/lviv-poi-coverage.geojson").write_text(json.dumps({"type": "FeatureCollection", "metadata": {
+    coverage_payload = json.dumps({"type": "FeatureCollection", "metadata": {
         "source": SOURCE, "snapshot": raw["snapshot"], "license": "ODbL-1.0", "attribution": "© OpenStreetMap contributors"},
-        "features": raw["boundaries"]}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        "features": raw["boundaries"]}, ensure_ascii=False, separators=(",", ":"))
+    write_files({target: output_payload, root / "data/lviv-poi-audit.json": json.dumps(audit, ensure_ascii=False, indent=2) + "\n",
+                 root / "data/lviv-poi-coverage.geojson": coverage_payload})
     print(json.dumps({key: value for key, value in audit.items() if key not in {
         "nestedSpaces", "duplicates", "unclassifiedCandidates", "streetWaysNotConvertedToMarkers", "invalidGeometryIds", "siteGroups", "addedOsmIds", "correctedPreviousMarkerIds"}}, ensure_ascii=False), flush=True)
 

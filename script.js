@@ -1,5 +1,5 @@
-import { setupPoi } from "./poi.js?v=20261101-regional-poi";
-import { setupNavigation } from "./navigation.js?v=20261101-mobile-ui";
+import { setupPoi } from "./poi.js?v=20261101-audit";
+import { setupNavigation } from "./navigation.js?v=20261101-audit";
 import {
   LngLatBounds,
   Map as MapLibreMap,
@@ -35,9 +35,14 @@ function setStatus(message) {
 }
 
 function showMapError(message) {
-  mapError.textContent = message;
+  mapError.textContent = safeMapError(message);
   mapError.hidden = false;
   setStatus("Помилка карти");
+}
+
+function safeMapError(error) {
+  return String(error?.message ?? error ?? "Невідома помилка")
+    .replace(/([?&](?:api)?key=)[^\s&#"'<>]+/gi, "$1[hidden]");
 }
 
 function signedArea(ring) {
@@ -49,10 +54,15 @@ function signedArea(ring) {
 }
 
 function orientRing(input, counterClockwise) {
+  if (!Array.isArray(input) || input.length < 3 || input.some(point => !Array.isArray(point) || point.length < 2 ||
+      !Number.isFinite(point[0]) || !Number.isFinite(point[1]) || Math.abs(point[0]) > 180 || Math.abs(point[1]) > 90)) {
+    throw new Error("Некоректні координати полігона України.");
+  }
   const ring = input.map(([longitude, latitude]) => [longitude, latitude]);
   if (ring.length && (ring[0][0] !== ring.at(-1)[0] || ring[0][1] !== ring.at(-1)[1])) {
     ring.push([...ring[0]]);
   }
+  if (ring.length < 4 || signedArea(ring) === 0) throw new Error("Порожній або вироджений полігон України.");
   const isCounterClockwise = signedArea(ring) > 0;
   return isCounterClockwise === counterClockwise ? ring : ring.reverse();
 }
@@ -72,6 +82,7 @@ function normalizeBoundary(collection) {
     orientRing(rings[0], true),
     ...rings.slice(1).map((ring) => orientRing(ring, false)),
   ]);
+  if (!orientedPolygons.length) throw new Error("Джерело меж містить порожній полігон України.");
   const geometry = feature.geometry.type === "Polygon"
     ? { type: "Polygon", coordinates: orientedPolygons[0] }
     : { type: "MultiPolygon", coordinates: orientedPolygons };
@@ -199,9 +210,16 @@ function transformMapTilerStyle(_previousStyle, nextStyle) {
 }
 
 async function readUkraineBoundary() {
-  const response = await fetch(UKRAINE_BOUNDARY_URL, { cache: "force-cache" });
-  if (!response.ok) throw new Error(`Локальні дані кордону України: HTTP ${response.status}.`);
-  return normalizeBoundary(await response.json());
+  const request = new AbortController();
+  const timeout = setTimeout(() => request.abort(), 30000);
+  try {
+    const response = await fetch(UKRAINE_BOUNDARY_URL, { cache: "force-cache", signal: request.signal });
+    if (!response.ok) throw new Error(`Локальні дані кордону України: HTTP ${response.status}.`);
+    return normalizeBoundary(await response.json());
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Час очікування локальних меж України вичерпано. Перевірте з’єднання та перезавантажте сторінку.");
+    throw error;
+  } finally { clearTimeout(timeout); }
 }
 
 function applyUkraineOnlyStyle(map, boundary, mask) {
@@ -245,6 +263,7 @@ function applyUkraineOnlyStyle(map, boundary, mask) {
     // Keep MapTiler's class filters, zoom stops, bridge/tunnel order and road casing.
     map.setPaintProperty(layer.id, "line-color", "#BABABA");
   }
+  for (const layer of poiLayers) map.setLayoutProperty(layer.id, "visibility", "none");
 
   if (map.getSource("ukraine-boundary")) {
     map.getSource("ukraine-boundary").setData(boundary);
@@ -298,10 +317,14 @@ function setupMobilePalette(map) {
     }
   }
   const apply = () => {
-    for (const { id, property, original, color } of changes) map.setPaintProperty(id, property, media.matches ? color : original);
+    for (const { id, property, original, color } of changes) {
+      if (map.getLayer(id)) map.setPaintProperty(id, property, media.matches ? color : original);
+    }
   };
   apply(); media.addEventListener("change", apply);
-  map.once("remove", () => media.removeEventListener("change", apply));
+  const dispose = () => { media.removeEventListener("change", apply); map.off("remove", dispose); };
+  map.on("remove", dispose);
+  return dispose;
 }
 
 async function startMap() {
@@ -335,7 +358,9 @@ async function startMap() {
     const transparentFallbackIds = new Set([" ", "transportation:road_"]);
     map.setMissingStyleImageResolver((id) => {
       if (!transparentFallbackIds.has(id) || map.hasImage(id)) return;
-      map.addImage(id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) });
+      // Streets' default/transportation sprites are SDF; a bitmap fallback mixes
+      // incompatible icon types in the same road-shield buffer.
+      map.addImage(id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) }, { sdf: true });
     });
 
     map.addControl(new NavigationControl({ showCompass: false, showZoom: true }), "top-right");
@@ -359,7 +384,7 @@ async function startMap() {
     let sourceHasLoaded = false;
     map.on("error", (event) => {
       const error = event.error;
-      console.error("MapLibre / MapTiler:", error?.message ?? error ?? event);
+      console.error("MapLibre / MapTiler:", safeMapError(error ?? event));
       const status = error?.status ?? error?.statusCode;
       if (status === 401 || status === 403) {
         showMapError("MapTiler відхилив ключ. Перевірте GitHub Actions secret MAPTILER_KEY та дозволені для ключа адреси сайту.");
@@ -372,33 +397,45 @@ async function startMap() {
       }
     });
 
-    map.once("style.load", () => {
+    let navigation, poi, disposePalette, pendingIdle, roadSource;
+    map.on("sourcedata", (event) => {
+      if (event.sourceId === roadSource && event.isSourceLoaded) {
+        sourceHasLoaded = true;
+        mapError.hidden = true;
+        setStatus("Карта завантажена");
+      }
+    });
+    const initializeStyle = () => {
       try {
+        sourceHasLoaded = false;
+        if (pendingIdle) map.off("idle", pendingIdle);
+        disposePalette?.();
         setStatus("Налаштування карти");
-        const roadSource = applyUkraineOnlyStyle(map, boundary, mask);
-        setupMobilePalette(map);
-        map.on("sourcedata", (event) => {
-          if (event.sourceId === roadSource && event.isSourceLoaded) {
-            sourceHasLoaded = true;
-            mapError.hidden = true;
-            setStatus("Карта завантажена");
-          }
-        });
-        map.once("idle", () => {
+        roadSource = applyUkraineOnlyStyle(map, boundary, mask);
+        disposePalette = setupMobilePalette(map);
+        pendingIdle = () => {
           if (!sourceHasLoaded) {
             showMapError("Стиль завантажено, але векторні тайли доріг не надійшли. Перевірте HTTP-помилки MapTiler у консолі браузера.");
           }
-        });
-        const navigation = setupNavigation(map, { Marker, LngLatBounds, boundary });
-        setupPoi(map, boundary, Popup, navigation.setDestination);
+        };
+        map.once("idle", pendingIdle);
+        if (navigation) navigation.restoreStyle();
+        else navigation = setupNavigation(map, { Marker, LngLatBounds, boundary });
+        if (poi) poi.restoreStyle();
+        else poi = setupPoi(map, boundary, Popup, navigation.setDestination);
+        if (map.isSourceLoaded(roadSource)) {
+          sourceHasLoaded = true; mapError.hidden = true; setStatus("Карта завантажена");
+        }
         map.resize();
       } catch (error) {
-        console.error("Не вдалося оформити карту України:", error);
+        console.error("Не вдалося оформити карту України:", safeMapError(error));
         showMapError(error.message || "Не вдалося налаштувати шари карти.");
       }
-    });
+    };
+    map.on("style.load", initializeStyle);
+    map.once("remove", () => { disposePalette?.(); map.off("style.load", initializeStyle); if (pendingIdle) map.off("idle", pendingIdle); });
   } catch (error) {
-    console.error("Не вдалося запустити карту:", error);
+    console.error("Не вдалося запустити карту:", safeMapError(error));
     showMapError(error.message || "Не вдалося завантажити карту.");
   }
 }

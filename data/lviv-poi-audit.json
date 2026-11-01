@@ -14,20 +14,22 @@
     "fuel": 90
   },
   "after": {
-    "repair": 197,
+    "repair": 223,
     "parking": 2329,
     "charging": 68,
     "paid": 106,
     "fuel": 168
   },
   "beforeCount": 2139,
-  "afterCount": 2868,
-  "newUniqueIds": 731,
+  "afterCount": 2894,
+  "newUniqueIds": 757,
   "addedOsmIds": [
     "node/10069208718",
     "node/10069208817",
+    "node/10298095139",
     "node/10824919905",
     "node/11300000302",
+    "node/11896474798",
     "node/12135142702",
     "node/12135142703",
     "node/12163512201",
@@ -39,6 +41,7 @@
     "node/12914323913",
     "node/12969335463",
     "node/13038884627",
+    "node/13078172805",
     "node/13157531401",
     "node/13204808056",
     "node/13273772501",
@@ -60,22 +63,36 @@
     "node/3673907131",
     "node/3680220615",
     "node/3698652982",
+    "node/3712169125",
     "node/384007647",
     "node/4232346489",
+    "node/4267007620",
     "node/4313556706",
     "node/4315016893",
     "node/4357117995",
+    "node/4373272645",
+    "node/4421716881",
     "node/4538962818",
+    "node/4541588752",
     "node/4555723191",
+    "node/4570270318",
+    "node/4571891963",
     "node/4719149401",
     "node/4721783991",
     "node/4772981811",
     "node/4772981812",
     "node/4772981813",
+    "node/4839652771",
+    "node/4856387357",
     "node/4872714321",
     "node/5285785694",
     "node/5304399177",
     "node/6098787655",
+    "node/6319133777",
+    "node/6346627564",
+    "node/6428544296",
+    "node/6428544297",
+    "node/6472436367",
     "node/6834306506",
     "node/6854515977",
     "node/6946072574",
@@ -91,6 +108,7 @@
     "node/7316001656",
     "node/7614467053",
     "node/7694417056",
+    "node/7710083914",
     "node/7722378648",
     "node/7747502813",
     "node/7755794450",
@@ -103,7 +121,10 @@
     "node/8050892220",
     "node/8418316413",
     "node/8519068121",
+    "node/8624685982",
+    "node/9183511304",
     "node/9267197117",
+    "node/9831279807",
     "node/9849752456",
     "node/9904380461",
     "node/9904380462",
@@ -136,6 +157,7 @@
     "relation/9584407",
     "relation/9585188",
     "relation/9748502",
+    "way/1006734211",
     "way/1006744672",
     "way/1016282539",
     "way/1016390141",
@@ -438,6 +460,7 @@
     "way/229632783",
     "way/229809882",
     "way/230543827",
+    "way/242905302",
     "way/254083655",
     "way/260184579",
     "way/281166003",
@@ -459,6 +482,7 @@
     "way/333972005",
     "way/333979872",
     "way/334005214",
+    "way/334028641",
     "way/334174269",
     "way/334320499",
     "way/334320500",
@@ -600,6 +624,7 @@
     "way/512002193",
     "way/512266932",
     "way/512266940",
+    "way/514008649",
     "way/516218479",
     "way/523591371",
     "way/523591382",
@@ -703,6 +728,7 @@
     "way/871490575",
     "way/872222734",
     "way/872222737",
+    "way/872222738",
     "way/872271406",
     "way/874576805",
     "way/874576812",
@@ -758,9 +784,9 @@
   ],
   "addedByCategory": {
     "charging": 16,
+    "repair": 55,
     "fuel": 80,
     "parking": 602,
-    "repair": 29,
     "paid": 4
   },
   "categoryChanges": [
@@ -776,7 +802,7 @@
     "node/6916223877"
   ],
   "beforeBytes": 592196,
-  "afterBytes": 891289,
+  "afterBytes": 903228,
   "administrativeCoverage": [
     {
       "osmId": "relation/2108755",
@@ -843,7 +869,7 @@
         "parking": 27,
         "paid": 2,
         "fuel": 2,
-        "repair": 1
+        "repair": 3
       }
     },
     {
@@ -864,7 +890,7 @@
       "admin_level": "9",
       "fullyInsideProcessedRegion": true,
       "counts": {
-        "repair": 161,
+        "repair": 183,
         "parking": 1796,
         "charging": 50,
         "paid": 103,
@@ -9550,23 +9576,7 @@
   "siteGroups": [],
   "unclassifiedCandidates": [
     {
-      "id": "node/3712169125",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/4267007620",
-      "reason": "No confirmed category tags"
-    },
-    {
       "id": "node/4313556679",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/4373272645",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/4421716881",
       "reason": "No confirmed category tags"
     },
     {
@@ -9574,27 +9584,7 @@
       "reason": "No confirmed category tags"
     },
     {
-      "id": "node/4541588752",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/4570270318",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/4571891963",
-      "reason": "No confirmed category tags"
-    },
-    {
       "id": "node/4839125595",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/4839652771",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/4856387357",
       "reason": "No confirmed category tags"
     },
     {
@@ -9607,26 +9597,6 @@
     },
     {
       "id": "node/6130552933",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/6319133777",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/6346627564",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/6428544296",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/6428544297",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/6472436367",
       "reason": "No confirmed category tags"
     },
     {
@@ -9646,10 +9616,6 @@
       "reason": "No confirmed category tags"
     },
     {
-      "id": "node/7710083914",
-      "reason": "No confirmed category tags"
-    },
-    {
       "id": "node/7771237297",
       "reason": "No confirmed category tags"
     },
@@ -9658,15 +9624,7 @@
       "reason": "No confirmed category tags"
     },
     {
-      "id": "node/8624685982",
-      "reason": "No confirmed category tags"
-    },
-    {
       "id": "node/8826987997",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/9183511304",
       "reason": "No confirmed category tags"
     },
     {
@@ -9686,19 +9644,7 @@
       "reason": "No confirmed category tags"
     },
     {
-      "id": "node/9831279807",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/10298095139",
-      "reason": "No confirmed category tags"
-    },
-    {
       "id": "node/12979990802",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "node/13078172805",
       "reason": "No confirmed category tags"
     },
     {
@@ -9706,23 +9652,7 @@
       "reason": "No confirmed category tags"
     },
     {
-      "id": "way/242905302",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "way/334028641",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "way/514008649",
-      "reason": "No confirmed category tags"
-    },
-    {
       "id": "way/832487523",
-      "reason": "No confirmed category tags"
-    },
-    {
-      "id": "way/872222738",
       "reason": "No confirmed category tags"
     }
   ],
@@ -9808,7 +9738,7 @@
   "correctedPreviousMarkerIds": [],
   "standaloneSpaces": 129,
   "access": {
-    "unknown": 2107,
+    "unknown": 2133,
     "private": 196,
     "yes": 408,
     "permit": 5,
@@ -9817,5 +9747,306 @@
     "no": 7,
     "permissive": 9,
     "destination": 1
+  },
+  "vehicleExpansion": {
+    "source": "https://download.geofabrik.de/europe/ukraine-latest.osm.pbf",
+    "snapshot": "2026-10-31T21:23:06Z",
+    "processedAt": "2026-11-01T19:58:20.634008+00:00",
+    "beforeCount": 2868,
+    "before": {
+      "repair": 197,
+      "parking": 2329,
+      "charging": 68,
+      "paid": 106,
+      "fuel": 168
+    },
+    "added": [
+      {
+        "id": "way/1006734211",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:car_repair=yes",
+        "coordinates": [
+          24.157514478304524,
+          49.81755475
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "way/242905302",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          23.92889524228952,
+          49.82365675
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "way/334028641",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.140171691050952,
+          49.813805599999995
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "way/514008649",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          24.031122496349198,
+          49.8656797
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "way/872222738",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          23.899954425045202,
+          49.7253123
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/10298095139",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          24.0455969,
+          49.8071386
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/11896474798",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:car_repair=yes",
+        "coordinates": [
+          24.0535623,
+          49.7970532
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/13078172805",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.0305496,
+          49.8622896
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/3712169125",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.0198717,
+          49.8185561
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4267007620",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          23.9674363,
+          49.8443175
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4373272645",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.020487,
+          49.7683664
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4421716881",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.0161904,
+          49.808711
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4541588752",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.0406294,
+          49.8010156
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4570270318",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          23.9756459,
+          49.8347198
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4571891963",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.0259824,
+          49.8506599
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4839652771",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.0201717,
+          49.8011455
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/4856387357",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          23.9897022,
+          49.8144921
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/6319133777",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          24.0566519,
+          49.8624944
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/6346627564",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          24.0423574,
+          49.8185445
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/6428544296",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          24.0527083,
+          49.8109001
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/6428544297",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          24.0541303,
+          49.8107033
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/6472436367",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          24.0287902,
+          49.868482
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/7710083914",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          23.9758352,
+          49.8522299
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/8624685982",
+        "category": "repair",
+        "evidence": "OSM: магазин шин із явною назвою послуги шиномонтажу",
+        "coordinates": [
+          23.9860135,
+          49.8458961
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/9183511304",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          24.0244717,
+          49.8691719
+        ],
+        "access": "unknown"
+      },
+      {
+        "id": "node/9831279807",
+        "category": "repair",
+        "evidence": "OSM: service:vehicle:tyres=yes",
+        "coordinates": [
+          23.95704,
+          49.8231639
+        ],
+        "access": "unknown"
+      }
+    ],
+    "excluded": [
+      {
+        "id": "node/12080619130",
+        "reason": "Previously verified alias"
+      },
+      {
+        "id": "node/4718642689",
+        "reason": "Previously verified alias"
+      },
+      {
+        "id": "node/6916223877",
+        "reason": "Previously verified alias"
+      }
+    ],
+    "accessNote": "Missing access is unknown, not public. OSM snapshot, not live operational verification.",
+    "afterCount": 2894,
+    "after": {
+      "repair": 223,
+      "parking": 2329,
+      "charging": 68,
+      "paid": 106,
+      "fuel": 168
+    },
+    "newByCategory": {
+      "repair": 26
+    }
   }
 }
