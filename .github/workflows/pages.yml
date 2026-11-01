@@ -28,21 +28,26 @@ jobs:
       - name: Prepare static site
         env:
           MAPTILER_KEY: ${{ secrets.MAPTILER_KEY }}
+          GEOAPIFY_KEY: ${{ secrets.GEOAPIFY_KEY }}
         run: |
           set -euo pipefail
           if [ -z "$MAPTILER_KEY" ]; then
             echo "::error::Add the MAPTILER_KEY repository secret before deploying."
             exit 1
           fi
+          if [ -z "$GEOAPIFY_KEY" ]; then
+            echo "::error::Add the GEOAPIFY_KEY repository secret before deploying navigation."
+            exit 1
+          fi
 
           # Start from an empty artifact directory so a previous or tracked config cannot survive.
           rm -rf dist
           mkdir -p dist/data
-          cp index.html styles.css script.js poi.js dist/
+          cp index.html styles.css script.js poi.js navigation.js dist/
           cp favicon.ico dist/
           cp data/ukraine-boundary.geojson dist/data/
           cp data/lviv-poi.geojson dist/data/
-          jq -cn --arg key "$MAPTILER_KEY" '{mapTilerKey:$key}' \
+          jq -cn --arg key "$MAPTILER_KEY" --arg route "$GEOAPIFY_KEY" '{mapTilerKey:$key,geoapifyKey:$route}' \
             | sed 's/^/window.PARKING_MAP_CONFIG = Object.freeze(/; s/$/);/' \
             > dist/map-config.js
           touch dist/.nojekyll
@@ -68,14 +73,20 @@ jobs:
             console.error("Generated map-config.js does not contain a non-empty key.");
             process.exit(1);
           }
-          console.log("Generated map-config.js is valid; MapTiler key present (value hidden).");
+          if (typeof config.geoapifyKey !== "string" || config.geoapifyKey.trim().length === 0) {
+            console.error("Generated map-config.js does not contain a non-empty Geoapify key.");
+            process.exit(1);
+          }
+          console.log("Generated map-config.js is valid; MapTiler and Geoapify keys present (values hidden).");
           NODE
           unset MAPTILER_KEY
+          unset GEOAPIFY_KEY
 
           test -s dist/index.html
           test -s dist/styles.css
           test -s dist/script.js
           test -s dist/poi.js
+          test -s dist/navigation.js
           test -s dist/favicon.ico
           test -s dist/map-config.js
           test -s dist/data/ukraine-boundary.geojson

@@ -1,7 +1,9 @@
 import { setupPoi } from "./poi.js?v=20261101-lviv";
+import { setupNavigation } from "./navigation.js?v=20261101-navigation";
 import {
   LngLatBounds,
   Map as MapLibreMap,
+  Marker,
   NavigationControl,
   Popup,
 } from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
@@ -348,7 +350,8 @@ async function startMap() {
             showMapError("Стиль завантажено, але векторні тайли доріг не надійшли. Перевірте HTTP-помилки MapTiler у консолі браузера.");
           }
         });
-        setupPoi(map, boundary, Popup);
+        const navigation = setupNavigation(map, { Marker, LngLatBounds, boundary });
+        setupPoi(map, boundary, Popup, navigation.setDestination);
         map.resize();
       } catch (error) {
         console.error("Не вдалося оформити карту України:", error);

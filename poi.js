@@ -50,7 +50,7 @@ export function toFeatures(elements, key, geometry) {
   return { type: "FeatureCollection", features: [...unique.values()] };
 }
 
-export function setupPoi(map, boundary, Popup) {
+export function setupPoi(map, boundary, Popup, onDestination) {
   const status = document.querySelector("#poi-status");
   const buttons = [...document.querySelectorAll("[data-poi]")];
   const active = new Set();
@@ -119,11 +119,18 @@ export function setupPoi(map, boundary, Popup) {
       add("Доступ", props.access);
       add("Оператор", props.operator);
       add("Години роботи", props.opening_hours);
-      const link = document.createElement("a");
-      link.textContent = "Об’єкт в OpenStreetMap";
-      link.href = `https://www.openstreetmap.org/${props.osmId}`;
-      link.target = "_blank"; link.rel = "noopener noreferrer";
-      content.append(link);
+      const source = document.createElement("small");
+      source.textContent = `Джерело: OSM ${props.osmId}`;
+      content.append(source);
+      const routeButton = document.createElement("button");
+      routeButton.type = "button";
+      routeButton.className = "popup-route-button";
+      routeButton.textContent = "Прокласти маршрут";
+      routeButton.addEventListener("click", () => {
+        onDestination(feature.geometry.coordinates, props.name || category.label);
+        popup?.remove();
+      });
+      content.append(routeButton);
       popup = new Popup({ maxWidth: "290px" }).setLngLat(feature.geometry.coordinates).setDOMContent(content).addTo(map);
     });
     listen("mouseenter", id, () => { map.getCanvas().style.cursor = "pointer"; });
