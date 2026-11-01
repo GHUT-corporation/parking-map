@@ -1,4 +1,4 @@
-import { insideUkraine } from "./poi.js?v=20261101-lviv-expanded";
+import { insideUkraine } from "./poi.js?v=20261101-regional-poi";
 
 const ROUTING_URL = "https://api.geoapify.com/v1/routing";
 const empty = { type: "FeatureCollection", features: [] };
@@ -35,10 +35,30 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
 
   if (!map.getSource("navigation-route")) map.addSource("navigation-route", { type: "geojson", data: empty,
     attribution: 'Powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>' });
-  for (const [id, width, color] of [["navigation-outline", 10, "#0b315e"], ["navigation-line", 6, "#238BFF"]]) {
+  // A shared MultiLineString source keeps every stroke on the original route geometry.
+  // Layered colors avoid restarting a line-progress gradient on each route segment.
+  const routeLayers = [
+    { id: "navigation-glow", color: "#7D41FF", opacity: .20,
+      width: [8, 12, 16, 20, 24], blur: [3, 4, 6, 8, 10] },
+    { id: "navigation-outline", color: "#7938FF", opacity: .95,
+      width: [2.5, 4, 5.5, 7, 8], blur: [0, 0, 0, 0, 0] },
+    { id: "navigation-line", color: "#8261FF", opacity: 1,
+      width: [1.2, 2, 3, 4, 4.5], blur: [0, 0, 0, 0, 0] },
+  ];
+  const byZoom = (values) => ["interpolate", ["linear"], ["zoom"],
+    5, values[0], 10, values[1], 13, values[2], 16, values[3], 20, values[4]];
+  for (const { id, width, color, blur } of routeLayers) {
     if (!map.getLayer(id)) map.addLayer({ id, type: "line", source: "navigation-route",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": color, "line-width": width, "line-opacity": .95 } });
+      paint: { "line-color": color, "line-width": byZoom(width), "line-blur": byZoom(blur),
+        "line-opacity": 0, "line-opacity-transition": { duration: 0, delay: 0 } } });
+  }
+  function setRouteVisible(visible) {
+    const duration = visible && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 280 : 0;
+    for (const { id, opacity } of routeLayers) {
+      map.setPaintProperty(id, "line-opacity-transition", { duration, delay: 0 });
+      map.setPaintProperty(id, "line-opacity", visible ? opacity : 0);
+    }
   }
 
   function notice(message) { ui.status.textContent = message; ui.status.hidden = false; }
@@ -129,6 +149,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     ui.clear.hidden = false;
     route = null; coords = []; steps = [];
     map.getSource("navigation-route").setData(empty);
+    setRouteVisible(false);
     ui.start.disabled = true;
     ui.next.textContent = "";
     ui.summary.textContent = position ? "Розрахунок маршруту…" : "Спершу визначте місцеперебування.";
@@ -173,6 +194,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
       coords = feature.geometry.coordinates.flat();
       steps = feature.properties.legs?.flatMap((leg) => leg.steps ?? []) ?? [];
       map.getSource("navigation-route").setData({ type: "FeatureCollection", features: [feature] });
+      setRouteVisible(true);
       ui.summary.textContent = `${readableDistance(feature.properties.distance)} · близько ${Math.ceil(feature.properties.time / 60)} хв`;
       ui.start.disabled = false;
       notice("Маршрут розраховано за OSM. Перевіряйте актуальні дорожні обмеження самостійно.");
@@ -250,6 +272,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     stop(); controller?.abort(); destination = undefined; route = null; coords = []; steps = [];
     destinationMarker?.remove(); destinationMarker = undefined;
     map.getSource("navigation-route").setData(empty);
+    setRouteVisible(false);
     ui.destination.textContent = "Пункт призначення не вибрано";
     ui.summary.textContent = "Оберіть POI або місце на карті правою кнопкою миші.";
     ui.next.textContent = ""; ui.start.disabled = true; ui.clear.hidden = true;

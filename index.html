@@ -11,19 +11,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20261101-regional-poi" />
   </head>
   <body>
     <main class="app-shell">
 <section class="workspace" aria-label="Мапа та інструменти">
         <div class="map-panel" id="map" aria-label="Мапа України">
-          <div class="map-topline">
-            <div>
-              <p class="eyebrow">ВАШ МІСЬКИЙ НАВІГАТОР</p>
-              <h1>Мапа</h1>
-            </div>
-            <span class="map-status"><span class="status-dot"></span><span id="map-status-text">Підключення карти</span></span>
-          </div>
+          <span id="map-status-text" class="sr-only" role="status" aria-live="polite">Підключення карти</span>
           <div class="map-viewport">
             <div id="interactive-map" class="map-canvas" role="application" aria-label="Інтерактивна карта України"></div>
             <div id="map-error" class="map-error" role="alert" hidden></div>
@@ -80,6 +74,6 @@
 
     </main>
     <script src="./map-config.js"></script>
-    <script type="module" src="./script.js?v=20261101-lviv-expanded"></script>
+    <script type="module" src="./script.js?v=20261101-regional-poi"></script>
   </body>
 </html>

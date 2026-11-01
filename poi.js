@@ -1,11 +1,14 @@
 // Independent OSM overlays. No MapTiler layers or sources are modified here.
 export const CATEGORIES = {
   parking: { label: "Парковки", zoom: 13, selector: '["amenity"="parking"]', color: "#53E6E1" },
-  paid: { label: "Платні парковки", zoom: 13, selector: '["amenity"="parking"]["fee"="yes"]', color: "#FFD279" },
+  paid: { label: "Платні парковки", zoom: 13, selector: '["amenity"="parking"]', color: "#FFD279" },
   charging: { label: "Електрозаправки", zoom: 11, selector: '["amenity"="charging_station"]', color: "#A1E69A" },
   fuel: { label: "Заправки", zoom: 11, selector: '["amenity"="fuel"]', color: "#F6A474" },
-  repair: { label: "СТО", zoom: 12, selector: '["shop"="car_repair"]', color: "#B8A7FF" },
+  repair: { label: "СТО", zoom: 12, selector: '["shop"="car_repair"]',
+    extraSelectors: ["car_repair", "tyres_repair", "oil_change"].map((service) => `["shop"~"^(car|car_parts|tyres)$"]["service:vehicle:${service}"="yes"]`), color: "#B8A7FF" },
 };
+// Matches the processed region recorded by scripts/build_lviv_poi.py.
+const LOCAL_POI_BBOX = [23.75, 49.65, 24.35, 50.05];
 const ENDPOINT = "https://overpass-api.de/api/interpreter";
 const DAILY_REQUEST_LIMIT = 30;
 const DAILY_COUNTER_KEY = "parking-map-overpass-daily";
@@ -25,11 +28,29 @@ export function insideUkraine(point, geometry) {
   return polygons.some(([outer, ...holes]) => inRing(outer) && !holes.some(inRing));
 }
 
+export function isPaidParking(tags) {
+  if (tags.fee === "yes") return true;
+  const positivePrice = (value) => {
+    const price = String(value ?? "").match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:UAH|EUR|USD|грн)(?:\b|\/|\s|$)/i);
+    return !!price && Number(price[1].replace(",", ".")) > 0;
+  };
+  if (positivePrice(tags.fee)) return true;
+  if (tags.fee || tags["fee:conditional"]) return false;
+  return positivePrice(tags.charge);
+}
+
+export function categoryFor(tags) {
+  if (["parking", "parking_space"].includes(tags.amenity) || tags.site === "parking") return isPaidParking(tags) ? "paid" : "parking";
+  if (tags.amenity === "charging_station") return "charging";
+  if (tags.amenity === "fuel") return "fuel";
+  if (tags.shop === "car_repair" ||
+      (["car", "car_parts", "tyres"].includes(tags.shop) &&
+       ["car_repair", "tyres_repair", "oil_change"].some((service) => tags[`service:vehicle:${service}`] === "yes"))) return "repair";
+  return null;
+}
+
 export function matchesCategory(tags, key) {
-  if (key === "parking") return tags.amenity === "parking" && tags.fee !== "yes";
-  if (key === "paid") return tags.amenity === "parking" && tags.fee === "yes";
-  if (key === "repair") return tags.shop === "car_repair";
-  return tags.amenity === (key === "charging" ? "charging_station" : "fuel");
+  return categoryFor(tags) === key;
 }
 
 export function toFeatures(elements, key, geometry) {
@@ -82,7 +103,12 @@ export function setupPoi(map, boundary, Popup, onDestination) {
   const buttons = [...document.querySelectorAll("[data-poi]")];
   const active = new Set();
   let localData = null;
-  const localPromise = fetch("./data/lviv-poi.geojson?v=20261101-lviv-expanded", { cache: "force-cache" })
+  let localPromise, localError = false;
+  const localByCategory = new Map();
+  const localInsideCache = new Map();
+  function readLocal() {
+    if (localPromise) return localPromise;
+    localPromise = fetch("./data/lviv-poi.geojson?v=20261101-regional-poi", { cache: "force-cache" })
     .then((response) => {
       if (!response.ok) throw new Error(`Local POI HTTP ${response.status}`);
       return response.json();
@@ -91,8 +117,13 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       if (data.type !== "FeatureCollection" || !Array.isArray(data.features) ||
           !Array.isArray(data.metadata?.bbox)) throw new Error("Invalid local POI GeoJSON");
       localData = data;
+      for (const key of Object.keys(CATEGORIES)) {
+        localByCategory.set(key, data.features.filter((feature) => feature.properties?.category === key));
+      }
     })
-    .catch(() => { /* Outside the local extract, Overpass remains available. */ });
+    .catch(() => { localError = true; });
+    return localPromise;
+  }
   const extent = [Infinity, Infinity, -Infinity, -Infinity];
   const visit = (coordinates) => {
     if (typeof coordinates[0] === "number") {
@@ -141,13 +172,30 @@ export function setupPoi(map, boundary, Popup, onDestination) {
         row.textContent = `${label}: ${value}`;
         content.append(row);
       };
-      add("Тип", category.label);
+      add("Тип", props.amenity === "parking_space" ? "Окреме паркувальне місце" : category.label);
       add("Адреса", [props["addr:city"], props["addr:street"], props["addr:housenumber"]].filter(Boolean).join(", "));
-      add("Оплата", props.fee === "yes" ? "Платно" : props.fee === "no" ? "Безкоштовно" : props.fee || (key === "parking" ? "Невідома" : ""));
+      add("Оплата", isPaidParking(props) ? "Платно" : props.fee === "no" ? "Безкоштовно" : props.fee || (["parking", "paid"].includes(key) ? "Невідома" : ""));
+      add("Тариф OSM", props.charge);
       add("Умови оплати", props["fee:conditional"]);
-      add("Доступ", props.access);
+      add("Доступ", ({ private: "Приватний — не для загального користування", no: "Доступ заборонений", customers: "Лише для клієнтів", permit: "За дозволом", yes: "Загальний", permissive: "З дозволу власника" })[props.access] || props.access);
+      add("Умови доступу", props["access:conditional"]);
+      add("Місць (OSM)", props.capacity);
+      add("Місць для людей з інвалідністю", props["capacity:disabled"]);
+      add("Тип паркування", ({ surface: "Наземне", underground: "Підземне", multi_storey: "Багаторівневе", street_side: "Уздовж вулиці", lane: "Паркувальна смуга", rooftop: "На даху" })[props.parking] || props.parking);
+      add("Окремо нанесених місць усередині", props.mapped_spaces);
       add("Оператор", props.operator);
       add("Години роботи", props.opening_hours);
+      add("Телефон", props.phone || props["contact:phone"] || props["phone:UA"] || props["contact:phone:UA"]);
+      add("Вебсайт", props.website || props["contact:website"]);
+      const taggedDetails = (prefix) => Object.entries(props)
+        .filter(([tag, value]) => tag.startsWith(prefix) && value && value !== "no" && value !== "0")
+        .map(([tag, value]) => `${tag.slice(prefix.length)}: ${value}`).join("; ");
+      if (key === "charging") {
+        add("Роз’єми / потужність OSM", taggedDetails("socket:"));
+        add("Потужність", props["charging_station:output"] || props.output);
+      }
+      if (key === "fuel") add("Пальне OSM", taggedDetails("fuel:"));
+      if (key === "repair") add("Послуги OSM", taggedDetails("service:vehicle:"));
       const source = document.createElement("small");
       source.textContent = `Джерело: OSM ${props.osmId}`;
       content.append(source);
@@ -161,7 +209,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
         popup?.remove();
       });
       content.append(routeButton);
-      popup = new Popup({ maxWidth: "290px" }).setLngLat(feature.geometry.coordinates).setDOMContent(content).addTo(map);
+      popup = new Popup({ maxWidth: "290px", className: "poi-popup" }).setLngLat(feature.geometry.coordinates).setDOMContent(content).addTo(map);
     });
     listen("mouseenter", id, () => { map.getCanvas().style.cursor = "pointer"; });
     listen("mouseleave", id, () => { map.getCanvas().style.cursor = ""; });
@@ -185,12 +233,16 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     for (const key of keys) {
       const combined = new Map();
       for (const feature of liveFeatures.get(key) ?? []) {
-        if (bounds.contains(feature.geometry.coordinates)) combined.set(feature.properties.osmId, feature);
+        if (bounds.contains(feature.geometry.coordinates)) {
+          const canonical = localData?.metadata.osmIdAliases?.[feature.properties.osmId] ?? feature.properties.osmId;
+          combined.set(canonical, feature);
+        }
       }
-      for (const feature of localData?.features ?? []) {
-        if (feature.properties?.category === key &&
-            bounds.contains(feature.geometry.coordinates) &&
-            insideUkraine(feature.geometry.coordinates, boundary.geometry)) {
+      for (const feature of localByCategory.get(key) ?? []) {
+        if (bounds.contains(feature.geometry.coordinates)) {
+          const id = feature.properties.osmId;
+          if (!localInsideCache.has(id)) localInsideCache.set(id, insideUkraine(feature.geometry.coordinates, boundary.geometry));
+          if (!localInsideCache.get(id)) continue;
           combined.set(feature.properties.osmId, feature);
         }
       }
@@ -226,10 +278,17 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     const keys = eligible();
     if (!keys.length) return;
     const version = revision;
-    await localPromise;
+    const currentBounds = map.getBounds();
+    const intersectsLocal = currentBounds.getEast() >= LOCAL_POI_BBOX[0] && currentBounds.getWest() <= LOCAL_POI_BBOX[2] &&
+      currentBounds.getNorth() >= LOCAL_POI_BBOX[1] && currentBounds.getSouth() <= LOCAL_POI_BBOX[3];
+    if (intersectsLocal) await readLocal();
     if (version !== revision || disposed) return;
     const bounds = map.getBounds();
     const availableCount = showAvailable(keys);
+    if (localError && intersectsLocal) {
+      status.textContent = "Не вдалося прочитати локальну базу POI. Збережені точки доступні; перезавантажте сторінку, щоб повторити завантаження.";
+      return;
+    }
     const fullyCovered = localData && boundsCovered(bounds, localData.metadata.bbox);
     if (fullyCovered) {
       status.textContent = `Львів · OSM: точок ${availableCount}. Видима область повністю покрита локальними даними.`;
@@ -276,7 +335,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       nextRequestAt = Date.now() + 5000;
       recordDailyRequest();
       try {
-        const selectors = [...new Set(keys.map((key) => CATEGORIES[key].selector))];
+        const selectors = [...new Set(keys.flatMap((key) => [CATEGORIES[key].selector, ...(CATEGORIES[key].extraSelectors ?? [])]))];
         const query = `[out:json][timeout:25];(${selectors.map((selector) => `nwr${selector}(${box.join(",")});`).join("")});out body center;`;
         const response = await fetch(ENDPOINT, {
           method: "POST", body: new URLSearchParams({ data: query }), signal: request.signal,
@@ -346,7 +405,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
   listen("movestart", () => { revision += 1; controller?.abort(); clearTimeout(timer); clearTimeout(retryTimer); popup?.remove(); });
   listen("moveend", schedule);
   map.once("remove", () => {
-    disposed = true; revision += 1; clearTimeout(timer); clearTimeout(retryTimer); controller?.abort(); popup?.remove(); cache.clear(); liveFeatures.clear();
+    disposed = true; revision += 1; clearTimeout(timer); clearTimeout(retryTimer); controller?.abort(); popup?.remove(); cache.clear(); liveFeatures.clear(); localByCategory.clear(); localInsideCache.clear();
     handlers.forEach((args) => map.off(...args));
     clicks.forEach(([button, click]) => button.removeEventListener("click", click));
   });

@@ -1,5 +1,5 @@
-import { setupPoi } from "./poi.js?v=20261101-lviv-expanded";
-import { setupNavigation } from "./navigation.js?v=20261101-lviv-expanded";
+import { setupPoi } from "./poi.js?v=20261101-regional-poi";
+import { setupNavigation } from "./navigation.js?v=20261101-regional-poi";
 import {
   LngLatBounds,
   Map as MapLibreMap,
@@ -27,20 +27,17 @@ const MAPTILER_POI_SOURCE_LAYERS = new Set([
 ]);
 const UKRAINE_BOUNDARY_URL = "./data/ukraine-boundary.geojson";
 const EMPTY_GEOJSON = { type: "FeatureCollection", features: [] };
-const statusPill = document.querySelector(".map-status");
 const statusText = document.querySelector("#map-status-text");
 const mapError = document.querySelector("#map-error");
 
-function setStatus(message, state = "") {
+function setStatus(message) {
   statusText.textContent = message;
-  statusPill.classList.remove("ready", "error");
-  if (state) statusPill.classList.add(state);
 }
 
 function showMapError(message) {
   mapError.textContent = message;
   mapError.hidden = false;
-  setStatus("Помилка карти", "error");
+  setStatus("Помилка карти");
 }
 
 function signedArea(ring) {
@@ -342,7 +339,7 @@ async function startMap() {
           if (event.sourceId === roadSource && event.isSourceLoaded) {
             sourceHasLoaded = true;
             mapError.hidden = true;
-            setStatus("Карта України · MapTiler", "ready");
+            setStatus("Карта завантажена");
           }
         });
         map.once("idle", () => {
