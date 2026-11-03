@@ -1,4 +1,4 @@
-import { insideUkraine } from "./poi.js?v=20261101-audit";
+import { insideUkraine } from "./poi.js?v=20261103-paid-booking";
 
 const ROUTING_URL = "https://api.geoapify.com/v1/routing";
 const empty = { type: "FeatureCollection", features: [] };
@@ -41,7 +41,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     workspace.style.setProperty("--mobile-header-height", `${entry.target.getBoundingClientRect().height}px`);
   });
   headerObserver.observe(document.querySelector(".navigation-details"));
-  let position, positionAt = 0, accuracy, heading, destination, destinationMarker, userMarker;
+  let position, positionAt = 0, accuracy, heading, destination, destinationOwner, destinationMarker, userMarker;
   let watchId, navigating = false, starting = false, routingPending = false, follow = false, controller, route, coords = [], steps = [], routeDistances = [];
   let lastReroute = 0, offRouteSince = 0, disposed = false, lastAngle = 0, compassExpiry, routingRetryAt = 0;
   let locationRevision = 0, watchRevision = 0, startRevision = 0;
@@ -157,7 +157,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     compassExpiry = setTimeout(() => { compassHeading = undefined; heading = undefined; renderHeading(); }, 3000);
   }
   function locationError(error) {
-    const text = error.code === 1 ? "Доступ до геолокації відхилено." :
+    const text = error.code === 1 ? "Доступ до геолокації відхилено. Дозвольте його в налаштуваннях браузера й натисніть кнопку місцеперебування на карті." :
       error.code === 3 ? "Час очікування GPS вичерпано." : "Не вдалося визначити місцеперебування.";
     notice(text, "error");
     heading = undefined; renderHeading();
@@ -173,17 +173,20 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
       if (destination) calculate();
     }, error => { if (!disposed && revision === locationRevision) locationError(error); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
   }
-  function setDestination(point, label = "Точка на карті") {
-    if (disposed) return;
+  function setDestination(point, label = "Точка на карті", { owner } = {}) {
+    if (disposed) return false;
     if (!validPoint(point) || !insideUkraine(point, boundary.geometry)) {
       notice("Виберіть точку в межах України.");
-      return;
+      return false;
     }
     controller?.abort(); controller = undefined; routingPending = false;
     destination = [...point];
+    // Ownership identifies a demo selection, never an operator booking or payment.
+    destinationOwner = owner;
     document.querySelector(".navigation-panel").hidden = false;
     destinationMarker?.remove();
-    const pin = document.createElement("span"); pin.textContent = "●"; pin.style.cssText = "color:#ff686f;font-size:32px;text-shadow:0 2px 5px #000";
+    const pin = document.createElement("span"); pin.textContent = "●";
+    pin.style.cssText = `color:${owner ? "#8A909C" : "#ff686f"};font-size:32px;text-shadow:0 2px 5px #000`;
     destinationMarker = new Marker({ element: pin, anchor: "bottom" }).setLngLat(point).addTo(map);
     ui.destination.textContent = label;
     ui.clear.hidden = false;
@@ -201,6 +204,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     syncMode();
     if (position && Date.now() - positionAt <= 60000) calculate();
     else locate();
+    return true;
   }
   async function calculate(isReroute = false) {
     if (disposed || !position || !destination) return;
@@ -367,7 +371,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     notice("Навігацію завершено. Відстеження GPS зупинено.");
   }
   function clear() {
-    stop(); controller?.abort(); controller = undefined; destination = undefined; route = null; coords = []; steps = [];
+    stop(); controller?.abort(); controller = undefined; destination = undefined; destinationOwner = undefined; route = null; coords = []; steps = [];
     destinationMarker?.remove(); destinationMarker = undefined;
     map.getSource("navigation-route")?.setData(empty);
     setRouteVisible(false);
@@ -392,7 +396,7 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
   function dispose() {
     if (disposed) return;
     disposed = true; stop(); controller?.abort(); destinationMarker?.remove(); userMarker?.remove();
-    destination = undefined; route = null; coords = []; steps = []; syncMode();
+    destination = undefined; destinationOwner = undefined; route = null; coords = []; steps = []; syncMode();
     document.querySelector(".navigation-panel").hidden = true;
     ui.status.hidden = true; ui.start.disabled = true;
     headerObserver.disconnect(); toolsToggle.removeEventListener("click", toggleTools); map.off("rotate", renderHeading);
@@ -402,7 +406,12 @@ export function setupNavigation(map, { Marker, LngLatBounds, boundary }) {
     map.off("contextmenu", contextmenu); map.off("dragstart", dragstart); map.off("remove", dispose);
   }
   map.on("remove", dispose);
-  return { setDestination, restoreStyle, dispose };
+  function clearDestinationFor(owner) {
+    if (disposed || !owner || destinationOwner !== owner) return false;
+    clear();
+    return true;
+  }
+  return { setDestination, clearDestinationFor, restoreStyle, dispose };
 }
 
 export function maneuverSymbol(type) {

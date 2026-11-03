@@ -65,6 +65,25 @@ function fixture({ignoreAbort=false}={}) {
 let scenarios=0;
 async function test(name,fn){await fn();scenarios++;console.log('PASS:',name);}
 try {
+  await test('Demo route ownership cancels only its own destination, including pending GPS',async()=>{
+    const f=fixture({ignoreAbort:true}),first={},second={};
+    f.nav.setDestination(destination,'Демо',{owner:first});assert.equal(f.current.length,1);
+    assert.equal(f.nav.clearDestinationFor(second),false);assert.equal(f.nav.clearDestinationFor(first),true);
+    f.current[0].ok(fix());await tick();assert.equal(f.requests.length,0,'Cancelled selection cannot route after late GPS');
+    f.nav.setDestination(destination,'Демо',{owner:first});f.current.at(-1).fail({code:1});
+    assert.equal(f.requests.length,0);assert.match(f.ui('status').textContent,/Дозвольте.*налаштуваннях браузера/);
+    await f.ui('location').click();f.current.at(-1).ok(fix());await tick();await f.reply(0);
+    assert.equal(f.map.getSource('navigation-route').data.features.length,1,'GPS retry can route to the selected demo parking');
+    assert.equal(f.nav.clearDestinationFor(first),true);
+    await f.locate();f.nav.setDestination(destination,'Демо',{owner:first});await f.reply(1);
+    f.nav.setDestination(destination,'Звичайний маршрут');await f.reply(2);
+    assert.equal(f.nav.clearDestinationFor(first),false,'An ordinary route to even the same coordinates is independent');
+    assert.equal(f.map.getSource('navigation-route').data.features.length,1);
+    f.nav.setDestination([24.06,49.86],'Інший демо-вибір',{owner:second});
+    assert.equal(f.nav.clearDestinationFor(first),false);assert.equal(f.nav.clearDestinationFor(second),true);
+    await f.reply(3);assert.equal(f.map.getSource('navigation-route').data.features.length,0,'Late success cannot restore a cancelled demo route');
+    await f.destroy();
+  });
   await test('Invalid accuracy and heading cannot create fabricated GPS data',async()=>{
     const f=fixture();assert.equal(f.current.length,0);
     for(const accuracy of [NaN,undefined,Infinity,0,-1,1001]){await f.locate(fix({accuracy}));assert.equal(f.map.getSource('navigation-accuracy').data.features.length,0);}

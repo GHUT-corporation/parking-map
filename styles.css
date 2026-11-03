@@ -156,6 +156,18 @@ h2 { margin-bottom: 0; font-size: 14px; letter-spacing: -.35px; }
 #nav-status { margin: 0; color: #aeb9ce; line-height: 1.45; }
 .navigation-panel small, .navigation-panel a { color: #8c9bb5; }
 .popup-route-button { display: block; margin-top: 9px; }
+.popup-booking-button, .popup-booking-dismiss { display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 8px 10px; border: 1px solid #a18ada; border-radius: 9px; background: #38295e; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.popup-booking-button:hover { background: #4b357e; }
+.popup-booking-button[hidden] { display: none; }
+.popup-booking-dismiss { background: transparent; border-color: #60637b; font-weight: 500; }
+.popup-booking-button:focus-visible, .popup-booking-dismiss:focus-visible { outline: 2px solid #53E6E1; outline-offset: 2px; }
+.poi-popup .popup-demo-note { color: #d7cfec; font-size: 11px; }
+.popup-booking-confirmation { margin-top: 8px; padding-top: 6px; border-top: 1px solid #60637b; }
+.popup-parking-actions { position: sticky; bottom: -12px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 8px; padding: 8px 0 12px; border-top: 1px solid #60637b; background: #1f2033; }
+.popup-parking-actions > button { min-height: 44px; margin: 0; padding: 7px; }
+.popup-parking-actions > .popup-demo-note { grid-column: 1 / -1; order: -1; margin: 0; line-height: 1.45; }
+.popup-parking-actions > .popup-booking-confirmation { grid-column: 1 / -1; margin: 0; padding: 0; border: 0; }
+.popup-parking-actions [hidden] { display: none; }
 .navigation-arrow { width: 30px; height: 30px; display: grid; place-items: center; filter: drop-shadow(0 2px 5px #000); }
 .navigation-arrow .point { width: 18px; height: 18px; border: 3px solid white; border-radius: 50%; background: #238BFF; box-shadow: 0 0 0 4px rgba(35,139,255,.2); }
 .navigation-arrow .heading { display: none; width: 26px; height: 30px; background: #238BFF; border: 2px solid white; clip-path: polygon(50% 0, 100% 88%, 50% 69%, 0 88%); transform: rotate(var(--heading)); transition: transform .3s ease; }
@@ -169,6 +181,7 @@ h2 { margin-bottom: 0; font-size: 14px; letter-spacing: -.35px; }
 .tools-panel { overflow-y: auto; }
 .map-canvas .maplibregl-popup-content { background: #1f2033; color: #f4f4fb; border: 1px solid #53E6E1; border-radius: 12px; padding: 16px 24px 12px 14px; font: 12px/1.6 Manrope, sans-serif; }
 .map-canvas .poi-popup .maplibregl-popup-content { max-height: min(60svh, 420px); overflow-y: auto; overflow-wrap: anywhere; }
+.map-canvas .poi-popup { z-index: 6; }
 .map-canvas .maplibregl-popup-tip { border-top-color: #1f2033; border-bottom-color: #1f2033; }
 .maplibregl-popup-content p { margin: 5px 0 0; }
 .maplibregl-popup-close-button { color: #fff; font-size: 20px; }

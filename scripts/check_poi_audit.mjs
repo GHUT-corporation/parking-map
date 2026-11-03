@@ -19,7 +19,7 @@ class Element {
   querySelector(){return this.icon??=new Element();}
   click(){this.listeners.get('click')?.();}
 }
-async function fixture(network,{outside=false}={}){
+async function fixture(network,{outside=false,onDestination=()=>{},cancelDestination=()=>{}}={}){
   let now=0,serial=0;const timers=new Map();
   globalThis.setTimeout=(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:now+ms});return id;};
   globalThis.clearTimeout=id=>timers.delete(id);Date.now=()=>now;
@@ -33,11 +33,51 @@ async function fixture(network,{outside=false}={}){
   const map={zoom:13,getZoom(){return this.zoom;},getBounds(){const [w,s,e,n]=bounds;return{getWest:()=>w,getEast:()=>e,getSouth:()=>s,getNorth:()=>n,contains:([x,y])=>x>=w&&x<=e&&y>=s&&y<=n};},getSource:id=>sources.get(id),addSource:(id,s)=>sources.set(id,{data:s.data,setData(data){this.data=data;}}),getLayer:id=>layers.get(id),addLayer:l=>{assert.ok(!layers.has(l.id),'No duplicate layer');layers.set(l.id,l);},setLayoutProperty:(id,p,v)=>layers.get(id).layout[p]=v,getCanvas:()=>({style:{}}),on:(...args)=>handlers.push(args),off:(...args)=>{const i=handlers.findIndex(h=>h.length===args.length&&h.every((v,j)=>v===args[j]));if(i>=0)handlers.splice(i,1);}};
   const fire=(event,layer,payload={})=>{for(const h of [...handlers])if(h[0]===event&&(typeof h[1]==='function'||h[1]===layer))h.at(-1)(payload);};
   let popup;class Popup {setLngLat(){return this;}setDOMContent(content){this.content=content;return this;}addTo(){popup=this;return this;}remove(){this.removed=true;}}
-  const instance=setupPoi(map,{geometry},Popup,()=>{});
+  const instance=setupPoi(map,{geometry},Popup,onDestination,{cancelDestination});
   const data=key=>sources.get('parking-map-poi-'+key).data.features;
   return {map,status,buttons,advance,calls,data,instance,sources,layers,handlers,fire,getPopup:()=>popup,move(box){fire('movestart');bounds=box;fire('moveend');},timers};
 }
 try{
+  {
+    const records=[osm(1,'parking'),osm(2,'paid',[24,49.8],{fee:'yes'}),osm(3,'charging'),osm(4,'fuel'),osm(5,'repair',[24,49.8],{amenity:undefined,shop:'car_repair'}),osm(6,'paid',[24.001,49.8],{charge:'20 UAH/hour'})];
+    const destinations=[],cancelled=[];
+    const f=await fixture(url=>Promise.resolve(response(url.includes('ocm')?{type:'FeatureCollection',features:[]}:local(records))),{onDestination:(...args)=>destinations.push(args),cancelDestination:owner=>cancelled.push(owner)});
+    for(const key of Object.keys(f.buttons))f.buttons[key].click();await f.advance(700);
+    const find=(root,text)=>root.children.flatMap(c=>[c,...all(c)]).find(c=>c.textContent===text);
+    const all=root=>root.children.flatMap(c=>[c,...all(c)]);
+    const open=record=>{f.fire('click','parking-map-poi-'+record.properties.category,{features:[record]});return f.getPopup().content;};
+    for(const record of records){const p=open(record);assert.equal(!!find(p,'Забронювати'),record.properties.category==='paid');}
+    let content=open(records[1]);find(content,'Забронювати').click();
+    assert.equal(destinations.length,0,'First click only explains; no GPS or route before confirmation');
+    assert.equal(f.data('paid').some(f=>f.properties.demoSelected),false);
+    assert.ok(all(content).some(e=>e.textContent.includes('без резервування місця та оплати')));
+    find(content,'Назад').click();assert.equal(destinations.length,0);
+    content=f.getPopup().content;find(content,'Забронювати').click();const confirm=find(content,'Підтвердити демо-вибір');confirm.click();confirm.click();
+    assert.equal(destinations.length,1,'Double confirmation cannot duplicate requests');
+    const owner=destinations[0][2].owner;assert.ok(owner);
+    assert.deepEqual(destinations[0][0],records[1].geometry.coordinates);
+    assert.equal(f.data('paid').filter(f=>f.properties.demoSelected).length,1);
+    assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[1].id);
+    assert.ok(f.layers.get('parking-map-poi-paid').paint['circle-color'].includes('#8A909C'));
+    assert.ok(f.layers.get('parking-map-poi-paid').paint['circle-stroke-color'].includes('#C5CAD4'));
+    const radius=JSON.stringify(f.layers.get('parking-map-poi-paid').paint['circle-radius']);
+    assert.equal(f.layers.get('parking-map-poi-fuel').paint['circle-color'],'#F6A474');
+    const callCount=f.calls.length,handlers=f.handlers.length;
+    f.sources.clear();f.layers.clear();f.layers.set('outside-ukraine',{});f.instance.restoreStyle();f.instance.restoreStyle();
+    assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[1].id);assert.equal(f.calls.length,callCount);assert.equal(f.handlers.length,handlers);
+    assert.equal(JSON.stringify(f.layers.get('parking-map-poi-paid').paint['circle-radius']),radius);
+    f.buttons.paid.click();f.buttons.paid.click();await f.advance(700);assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[1].id);
+    content=open(records[1]);assert.ok(find(content,'Скасувати бронювання'));assert.ok(all(content).some(e=>e.textContent.includes('Фактичне місце не зарезервовано')));
+    content=open(records[5]);find(content,'Забронювати').click();find(content,'Підтвердити демо-вибір').click();
+    assert.equal(f.data('paid').filter(f=>f.properties.demoSelected).length,1);assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[5].id);
+    assert.notEqual(destinations[1][2].owner,owner);
+    content=open(records[5]);find(content,'Скасувати бронювання').click();assert.equal(f.data('paid').some(f=>f.properties.demoSelected),false);assert.equal(cancelled[0],destinations[1][2].owner);
+    assert.equal(destinations.length,2,'Cancellation never builds another route');
+    assert.equal(records.some(r=>Object.hasOwn(r.properties,'demoSelected')),false,'Original cached data are unchanged');
+    // A bogus paid category cannot grant a booking button without fee evidence.
+    content=open(osm(9,'paid'));assert.equal(!!find(content,'Забронювати'),false);
+    f.instance.dispose();assert.equal(f.handlers.length,0);
+  }
   assert.equal(toFeatures([null,{}, {type:'thing',id:1,tags:{amenity:'fuel'},lat:49,lon:24},{type:'node',id:1,tags:{amenity:'fuel'},lat:49,lon:24}], 'fuel',geometry).features.length,1);
   {
     const late=deferred();

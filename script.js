@@ -1,5 +1,5 @@
-import { setupPoi } from "./poi.js?v=20261101-audit";
-import { setupNavigation } from "./navigation.js?v=20261101-audit";
+import { setupPoi } from "./poi.js?v=20261103-paid-booking";
+import { setupNavigation } from "./navigation.js?v=20261103-paid-booking";
 import {
   LngLatBounds,
   Map as MapLibreMap,
@@ -422,7 +422,7 @@ async function startMap() {
         if (navigation) navigation.restoreStyle();
         else navigation = setupNavigation(map, { Marker, LngLatBounds, boundary });
         if (poi) poi.restoreStyle();
-        else poi = setupPoi(map, boundary, Popup, navigation.setDestination);
+        else poi = setupPoi(map, boundary, Popup, navigation.setDestination, { cancelDestination: navigation.clearDestinationFor });
         if (map.isSourceLoaded(roadSource)) {
           sourceHasLoaded = true; mapError.hidden = true; setStatus("Карта завантажена");
         }

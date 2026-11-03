@@ -42,7 +42,30 @@ export function insideUkraine(point, geometry) {
   catch { return false; }
 }
 
+// Documented OSM street-parking schemes; a marker represents this exact OSM
+// segment, never a whole named street or an inferred separately mapped lot.
+export function paidParkingSides(tags) {
+  if (!tags.highway) return [];
+  const present = new Set(["lane", "street_side", "on_kerb", "half_on_kerb", "shoulder"]);
+  const orientation = new Set(["parallel", "diagonal", "perpendicular"]);
+  return ["left", "right"].flatMap(side => {
+    const get = suffix => tags[`parking:${side}${suffix}`] ?? tags[`parking:both${suffix}`];
+    const physical = get("");
+    const oldLane = tags[`parking:lane:${side}`] ?? tags["parking:lane:both"];
+    if (physical !== undefined ? !present.has(physical) : !orientation.has(oldLane)) return [];
+    const fee = get(":fee");
+    if (fee === "yes") return [{ side, evidence: `parking:${tags[`parking:${side}:fee`] === undefined ? "both" : side}:fee=yes` }];
+    if (fee !== undefined || get(":fee:conditional")) return [];
+    const prefix = tags[`parking:condition:${side}`] !== undefined ? `parking:condition:${side}` : "parking:condition:both";
+    const condition = tags[prefix];
+    if (!["ticket", "ticket;residents", "residents;ticket"].includes(condition) ||
+        tags[`${prefix}:time_interval`] || tags[`${prefix}:default`] || tags[`${prefix}:conditional`]) return [];
+    return [{ side, evidence: `${prefix}=${condition}` }];
+  });
+}
+
 export function isPaidParking(tags) {
+  if (tags.highway && !["parking", "parking_space"].includes(tags.amenity) && tags.site !== "parking") return paidParkingSides(tags).length > 0;
   if (tags.fee === "yes") return true;
   const positivePrice = (value) => {
     const price = String(value ?? "").match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:UAH|EUR|USD|грн)(?:\b|\/|\s|$)/i);
@@ -58,6 +81,7 @@ export function categoryFor(tags) {
   if (tags.amenity === "charging_station") return "charging";
   if (tags.amenity === "fuel") return "fuel";
   if (repairEvidence(tags)) return "repair";
+  if (paidParkingSides(tags).length) return "paid";
   return null;
 }
 
@@ -112,11 +136,15 @@ export function boundsCovered(bounds, boxes) {
   return true;
 }
 
-export function setupPoi(map, boundary, Popup, onDestination) {
+export function setupPoi(map, boundary, Popup, onDestination, { cancelDestination = () => {} } = {}) {
   const status = document.querySelector("#poi-status");
   const buttons = [...document.querySelectorAll("[data-poi]")];
   const active = new Set();
+  // Session-only demo choice. A future operator API must supply its own verified
+  // booking result; neither this object nor fee tags assert a reserved space.
+  let reservation;
   let localData = null;
+  const canonicalId = id => localData?.metadata.osmIdAliases?.[id] ?? id;
   let localPromise, chargingPromise, chargingComplete = false, localError = false, chargingError = false;
   const localByCategory = new Map();
   const localInsideCache = new Map();
@@ -139,7 +167,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     (external ? f.properties?.category === "charging" : CATEGORIES[f.properties?.category] && f.properties.osmId === f.id && categoryFor(f.properties) === f.properties.category);
   function readLocal() {
     if (localPromise) return localPromise;
-    localPromise = readJson("./data/lviv-poi.geojson?v=20261101-vehicle-poi", 30000)
+    localPromise = readJson("./data/lviv-poi.geojson?v=20261103-paid-booking", 30000)
     .then((data) => {
       if (data.type !== "FeatureCollection" || !Array.isArray(data.features) ||
           !Array.isArray(data.metadata?.bbox) || !data.metadata.bbox.length ||
@@ -196,7 +224,8 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       layout: { visibility: "none" },
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 6, 13, 7, 16, 8, 20, 10],
-        "circle-color": category.color, "circle-stroke-color": "#10182C",
+        "circle-color": key === "paid" ? ["case", ["==", ["get", "demoSelected"], true], "#8A909C", category.color] : category.color,
+        "circle-stroke-color": key === "paid" ? ["case", ["==", ["get", "demoSelected"], true], "#C5CAD4", "#10182C"] : "#10182C",
         "circle-stroke-width": 2, "circle-opacity": 0.95,
       },
     }, "outside-ukraine");
@@ -205,13 +234,14 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     showAvailable(eligible());
   }
   restoreStyle();
-  for (const [key, category] of Object.entries(CATEGORIES)) {
-    const id = sourceId(key);
-    listen("click", id, (event) => {
-      const feature = event.features?.[0];
-      if (!feature || !insideUkraine(feature.geometry?.coordinates, boundary.geometry)) return;
+  function openPopup(feature, key) {
+      if (disposed || !feature || !insideUkraine(feature.geometry?.coordinates, boundary.geometry)) return;
+      const category = CATEGORIES[key];
       popup?.remove();
       const props = feature.properties;
+      const confirmedPaid = key === "paid" && categoryFor(props) === "paid";
+      const streetParking = confirmedPaid && props.highway && !["parking", "parking_space"].includes(props.amenity) && props.site !== "parking";
+      const selected = confirmedPaid && reservation?.id === canonicalId(props.osmId);
       const content = document.createElement("div");
       const title = document.createElement("strong");
       title.textContent = props.name || category.label;
@@ -222,11 +252,18 @@ export function setupPoi(map, boundary, Popup, onDestination) {
         row.textContent = `${label}: ${value}`;
         content.append(row);
       };
-      add("Тип", props.amenity === "parking_space" ? "Окреме паркувальне місце" : category.label);
+      add("Тип", streetParking ? "Платне паркування на цьому сегменті вулиці (не окремий майданчик)" : props.amenity === "parking_space" ? "Окреме паркувальне місце" : category.label);
       add("Адреса", [props["addr:city"], props["addr:street"], props["addr:housenumber"]].filter(Boolean).join(", "));
       add("Оплата", isPaidParking(props) ? "Платно" : props.fee === "no" ? "Безкоштовно" : props.fee || (["parking", "paid"].includes(key) ? "Невідома" : ""));
       add("Тариф OSM", props.charge);
       add("Умови оплати", props["fee:conditional"]);
+      const sides = streetParking ? paidParkingSides(props) : [];
+      for (const { side, evidence } of sides) {
+        add(side === "left" ? "Ліва сторона за напрямком OSM" : "Права сторона за напрямком OSM", evidence);
+        for (const [tag, label] of [["fee:conditional", "Умови оплати"], ["charge", "Тариф OSM"], ["access", "Доступ"], ["access:conditional", "Умови доступу"], ["restriction", "Обмеження"], ["restriction:conditional", "Часові обмеження"], ["capacity", "Місць (OSM)"], ["maxstay", "Максимальна тривалість"]]) {
+          add(label, props[`parking:${side}:${tag}`] ?? props[`parking:both:${tag}`]);
+        }
+      }
       add("Доступ", ({ private: "Приватний — не для загального користування", no: "Доступ заборонений", customers: "Лише для клієнтів", permit: "За дозволом", yes: "Загальний", permissive: "З дозволу власника" })[props.access] || props.access);
       add("Умови доступу", props["access:conditional"]);
       add("Місць (OSM)", props.capacity);
@@ -247,7 +284,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       if (key === "fuel") add("Пальне OSM", taggedDetails("fuel:"));
       if (key === "repair") add("Послуги OSM", taggedDetails("service:vehicle:"));
       if (key === "repair") add("Підстава категорії", repairEvidence(props));
-      add("Дата зрізу джерела", props.sourceSnapshot);
+      add("Дата зрізу джерела", props.sourceSnapshot || (props.sourceRecord === "geofabrik" ? localData?.metadata.snapshot : localData?.metadata.sources?.[props.sourceRecord]?.extractedAt));
       add("Роз’єми та потужність", props.connectors);
       add("Доступ за джерелом", props.usage);
       add("Перевірено джерелом", props.sourceVerified);
@@ -256,6 +293,8 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       source.textContent = props.sourceName ? `Джерело: ${props.sourceName} · ${props.sourceId} · ${props.license}` : `Джерело: OSM ${props.osmId}`;
       content.append(source);
       const routeButton = document.createElement("button");
+      const actions = confirmedPaid ? document.createElement("div") : content;
+      if (confirmedPaid) actions.className = "popup-parking-actions";
       routeButton.type = "button";
       routeButton.className = "popup-route-button";
       routeButton.textContent = "Прокласти маршрут";
@@ -264,9 +303,71 @@ export function setupPoi(map, boundary, Popup, onDestination) {
         onDestination(feature.geometry.coordinates, props.name || category.label);
         popup?.remove();
       });
-      content.append(routeButton);
+      actions.append(routeButton);
+      if (confirmedPaid) {
+        const demo = document.createElement("p");
+        demo.className = "popup-demo-note";
+        demo.textContent = selected
+          ? "Демо-вибір для вас. Фактичне місце не зарезервовано; наявність вільних місць невідома."
+          : "Доступний демонстраційний вибір. Фактичне місце не резервується.";
+        actions.append(demo);
+        const bookingButton = document.createElement("button");
+        bookingButton.type = "button";
+        bookingButton.className = "popup-booking-button";
+        bookingButton.textContent = selected ? "Скасувати бронювання" : "Забронювати";
+        bookingButton.addEventListener("click", () => {
+          if (disposed) return;
+          if (selected) {
+            const owner = reservation?.owner;
+            reservation = undefined;
+            showAvailable(eligible());
+            cancelDestination(owner);
+            openPopup(feature, key);
+            return;
+          }
+          bookingButton.hidden = true;
+          routeButton.hidden = true;
+          demo.hidden = true;
+          const confirmation = document.createElement("div");
+          confirmation.className = "popup-booking-confirmation";
+          confirmation.setAttribute("role", "group");
+          confirmation.setAttribute("aria-label", "Підтвердження демонстраційного вибору парковки");
+          const explanation = document.createElement("p");
+          explanation.textContent = "Це демонстраційний вибір лише для вас, без резервування місця та оплати. Після підтвердження GPS-координати буде передано Geoapify для маршруту. Підтвердити?";
+          const confirm = document.createElement("button");
+          confirm.type = "button";
+          confirm.className = "popup-booking-button";
+          confirm.textContent = "Підтвердити демо-вибір";
+          const dismiss = document.createElement("button");
+          dismiss.type = "button";
+          dismiss.className = "popup-booking-dismiss";
+          dismiss.textContent = "Назад";
+          confirm.addEventListener("click", () => {
+            if (disposed || confirm.disabled) return;
+            confirm.disabled = true;
+            // Identity token prevents cancelling a later ordinary POI/map route,
+            // even when it has exactly the same destination coordinates.
+            const owner = {};
+            reservation = { id: canonicalId(props.osmId), owner };
+            showAvailable(eligible());
+            onDestination(feature.geometry.coordinates, props.name || category.label, { owner });
+            popup?.remove();
+          });
+          dismiss.addEventListener("click", () => openPopup(feature, key));
+          confirmation.append(explanation); confirmation.append(confirm); confirmation.append(dismiss);
+          actions.append(confirmation);
+          confirm.focus?.();
+          // Keep the confirmation in view inside the small mobile popup scroller.
+          confirmation.scrollIntoView?.({ block: "nearest" });
+        });
+        actions.append(bookingButton);
+        content.append(actions);
+      }
       popup = new Popup({ maxWidth: "290px", className: "poi-popup" }).setLngLat(feature.geometry.coordinates).setDOMContent(content).addTo(map);
-    });
+  }
+  for (const key of Object.keys(CATEGORIES)) {
+    const id = sourceId(key);
+    listen("click", id, (event) => openPopup(event.features?.[0], key));
     listen("mouseenter", id, () => { map.getCanvas().style.cursor = "pointer"; });
     listen("mouseleave", id, () => { map.getCanvas().style.cursor = ""; });
   }
@@ -290,7 +391,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
       const combined = new Map();
       for (const feature of liveFeatures.get(key) ?? []) {
         if (bounds.contains(feature.geometry.coordinates)) {
-          const canonical = localData?.metadata.osmIdAliases?.[feature.properties.osmId] ?? feature.properties.osmId;
+          const canonical = canonicalId(feature.properties.osmId);
           combined.set(canonical, feature);
         }
       }
@@ -302,7 +403,10 @@ export function setupPoi(map, boundary, Popup, onDestination) {
           combined.set(id, feature);
         }
       }
-      map.getSource(sourceId(key))?.setData({ type: "FeatureCollection", features: [...combined.values()] });
+      const features = [...combined.values()].map(feature => key === "paid" ? {
+        ...feature, properties: { ...feature.properties, demoSelected: reservation?.id === canonicalId(feature.properties.osmId) },
+      } : feature);
+      map.getSource(sourceId(key))?.setData({ type: "FeatureCollection", features });
       count += combined.size;
     }
     return count;
@@ -473,6 +577,7 @@ export function setupPoi(map, boundary, Popup, onDestination) {
     if (disposed) return;
     disposed = true; revision += 1; clearTimeout(timer); clearTimeout(retryTimer); controller?.abort(); popup?.remove(); cache.clear(); liveFeatures.clear(); localByCategory.clear(); localInsideCache.clear();
     dataRequests.forEach(request => request.abort()); dataRequests.clear(); localData = null;
+    reservation = undefined;
     handlers.forEach((args) => map.off(...args));
     clicks.forEach(([button, click]) => button.removeEventListener("click", click));
     map.off("remove", dispose);

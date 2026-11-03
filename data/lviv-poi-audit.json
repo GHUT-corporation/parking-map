@@ -17,12 +17,12 @@
     "repair": 223,
     "parking": 2329,
     "charging": 68,
-    "paid": 106,
+    "paid": 137,
     "fuel": 168
   },
   "beforeCount": 2139,
-  "afterCount": 2894,
-  "newUniqueIds": 757,
+  "afterCount": 2925,
+  "newUniqueIds": 788,
   "addedOsmIds": [
     "node/10069208718",
     "node/10069208817",
@@ -345,6 +345,7 @@
     "way/1444857418",
     "way/1444857419",
     "way/145567744",
+    "way/1456401535",
     "way/1476767166",
     "way/1476767167",
     "way/1484298272",
@@ -446,6 +447,14 @@
     "way/1573443336",
     "way/1573587058",
     "way/1573679389",
+    "way/161701599",
+    "way/164898117",
+    "way/164898120",
+    "way/164898122",
+    "way/169049971",
+    "way/183563027",
+    "way/183566080",
+    "way/186048031",
     "way/187155282",
     "way/194160247",
     "way/194160261",
@@ -455,12 +464,18 @@
     "way/228272634",
     "way/228272636",
     "way/228272639",
+    "way/228421143",
     "way/228763566",
     "way/229478149",
     "way/229632783",
     "way/229809882",
     "way/230543827",
+    "way/234541347",
+    "way/23541090",
     "way/242905302",
+    "way/24567348",
+    "way/24595231",
+    "way/24595257",
     "way/254083655",
     "way/260184579",
     "way/281166003",
@@ -477,6 +492,7 @@
     "way/298351100",
     "way/298351101",
     "way/315148952",
+    "way/32608459",
     "way/333438797",
     "way/333885441",
     "way/333972005",
@@ -524,8 +540,11 @@
     "way/387191258",
     "way/387419570",
     "way/387794736",
+    "way/39675336",
+    "way/39762750",
     "way/405105005",
     "way/409536975",
+    "way/40955979",
     "way/423201286",
     "way/423404350",
     "way/425917100",
@@ -632,8 +651,10 @@
     "way/538567833",
     "way/548992086",
     "way/548992088",
+    "way/58261575",
     "way/592280329",
     "way/593781076",
+    "way/606120690",
     "way/616325836",
     "way/616325846",
     "way/622657516",
@@ -641,6 +662,11 @@
     "way/634762037",
     "way/635440176",
     "way/638590903",
+    "way/640145099",
+    "way/641182017",
+    "way/641814946",
+    "way/641816016",
+    "way/641819776",
     "way/659488638",
     "way/659488639",
     "way/659488640",
@@ -650,6 +676,8 @@
     "way/666416900",
     "way/670711543",
     "way/678459294",
+    "way/684421682",
+    "way/684421716",
     "way/68705826",
     "way/687537941",
     "way/692551019",
@@ -691,6 +719,7 @@
     "way/788138834",
     "way/788138878",
     "way/788138880",
+    "way/78823640",
     "way/792670375",
     "way/798481664",
     "way/801954398",
@@ -725,6 +754,7 @@
     "way/862193685",
     "way/868873042",
     "way/868889381",
+    "way/87125869",
     "way/871490575",
     "way/872222734",
     "way/872222737",
@@ -780,14 +810,15 @@
     "way/971355977",
     "way/971355978",
     "way/971903340",
-    "way/982322805"
+    "way/982322805",
+    "way/991877915"
   ],
   "addedByCategory": {
     "charging": 16,
     "repair": 55,
     "fuel": 80,
     "parking": 602,
-    "paid": 4
+    "paid": 35
   },
   "categoryChanges": [
     {
@@ -802,7 +833,7 @@
     "node/6916223877"
   ],
   "beforeBytes": 592196,
-  "afterBytes": 903228,
+  "afterBytes": 926545,
   "administrativeCoverage": [
     {
       "osmId": "relation/2108755",
@@ -893,7 +924,7 @@
         "repair": 183,
         "parking": 1796,
         "charging": 50,
-        "paid": 103,
+        "paid": 134,
         "fuel": 78
       }
     }
@@ -9657,40 +9688,19 @@
     }
   ],
   "streetWaysNotConvertedToMarkers": [
-    23541090,
-    24567348,
     24567664,
-    24595231,
-    24595257,
-    32608459,
     32847601,
     36336696,
     36337386,
     36337387,
     37045905,
     38912415,
-    39675336,
-    39762750,
     39824967,
-    40955979,
     41428308,
-    58261575,
-    78823640,
-    87125869,
     156458290,
-    161701599,
-    164898117,
-    164898120,
-    164898122,
-    169049971,
     177201170,
     177201172,
-    183563027,
-    183566080,
-    186048031,
     186048369,
-    228421143,
-    234541347,
     239255130,
     275579235,
     345000013,
@@ -9701,15 +9711,7 @@
     483714102,
     496410317,
     603806265,
-    606120690,
-    640145099,
-    641182017,
     641312704,
-    641814946,
-    641816016,
-    641819776,
-    684421682,
-    684421716,
     721156252,
     721156253,
     781357141,
@@ -9728,17 +9730,15 @@
     933808273,
     933808274,
     933808275,
-    991877915,
     1154607033,
     1370368845,
-    1409176791,
-    1456401535
+    1409176791
   ],
   "invalidGeometryIds": [],
   "correctedPreviousMarkerIds": [],
   "standaloneSpaces": 129,
   "access": {
-    "unknown": 2133,
+    "unknown": 2164,
     "private": 196,
     "yes": 408,
     "permit": 5,
@@ -10047,6 +10047,1090 @@
     },
     "newByCategory": {
       "repair": 26
+    }
+  },
+  "paidExpansion": {
+    "source": "https://download.geofabrik.de/europe/ukraine-latest.osm.pbf",
+    "snapshot": "2026-11-02T21:21:26Z",
+    "pbfSha256": "5b3e09c08ee819aa0b9047179c510aaab027eb477e3b2370e3ceba13d195fe35",
+    "extractedAt": "2026-11-03T18:33:10.380590+00:00",
+    "license": "ODbL-1.0",
+    "inputSha256": "4696c42ce83d309fd9f47a58f1bfc5f5a32d53def02d98810760b932c3e0f533",
+    "beforeCount": 2894,
+    "before": {
+      "repair": 223,
+      "parking": 2329,
+      "charging": 68,
+      "paid": 106,
+      "fuel": 168
+    },
+    "added": [
+      {
+        "id": "way/1456401535",
+        "coordinates": [
+          24.0359704,
+          49.8433773
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0360104,
+              49.8430952
+            ],
+            [
+              24.0359824,
+              49.8432375
+            ],
+            [
+              24.0359507,
+              49.8436055
+            ],
+            [
+              24.0359445,
+              49.8436614
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/161701599",
+        "coordinates": [
+          24.0323071,
+          49.8397152
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.032746,
+              49.8398226
+            ],
+            [
+              24.0319297,
+              49.8396228
+            ],
+            [
+              24.031879,
+              49.8396099
+            ],
+            [
+              24.0318683,
+              49.8396072
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/164898117",
+        "coordinates": [
+          24.0278637,
+          49.8433255
+        ],
+        "evidence": "parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0285306,
+              49.8434288
+            ],
+            [
+              24.0284517,
+              49.8434166
+            ],
+            [
+              24.0276943,
+              49.8432992
+            ],
+            [
+              24.0276719,
+              49.8432957
+            ],
+            [
+              24.0275129,
+              49.8432709
+            ],
+            [
+              24.0272645,
+              49.8432322
+            ],
+            [
+              24.0271969,
+              49.8432217
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/164898120",
+        "coordinates": [
+          24.0284408,
+          49.8436408
+        ],
+        "evidence": "parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0283423,
+              49.8438482
+            ],
+            [
+              24.0283726,
+              49.843802
+            ],
+            [
+              24.0285306,
+              49.8434288
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/164898122",
+        "coordinates": [
+          24.0286157,
+          49.8431962
+        ],
+        "evidence": "parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0287008,
+              49.8429636
+            ],
+            [
+              24.0285468,
+              49.8433845
+            ],
+            [
+              24.0285306,
+              49.8434288
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/169049971",
+        "coordinates": [
+          24.0335754,
+          49.8350459
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0333673,
+              49.8357714
+            ],
+            [
+              24.0333839,
+              49.835749
+            ],
+            [
+              24.0336241,
+              49.8352743
+            ],
+            [
+              24.0336141,
+              49.8351977
+            ],
+            [
+              24.0334911,
+              49.8347157
+            ],
+            [
+              24.0334295,
+              49.834648
+            ],
+            [
+              24.0332954,
+              49.8345925
+            ],
+            [
+              24.0331641,
+              49.8345381
+            ],
+            [
+              24.0330985,
+              49.8345032
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/183563027",
+        "coordinates": [
+          24.0357003,
+          49.8439831
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0359445,
+              49.8436614
+            ],
+            [
+              24.0359399,
+              49.8437027
+            ],
+            [
+              24.0359114,
+              49.8437359
+            ],
+            [
+              24.0358826,
+              49.8437694
+            ],
+            [
+              24.0356051,
+              49.8440947
+            ],
+            [
+              24.0355638,
+              49.8441528
+            ],
+            [
+              24.0355509,
+              49.8442145
+            ],
+            [
+              24.0355765,
+              49.8443413
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/183566080",
+        "coordinates": [
+          24.0319419,
+          49.836163
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0316345,
+              49.8366486
+            ],
+            [
+              24.0316523,
+              49.8366152
+            ],
+            [
+              24.0321529,
+              49.8358335
+            ],
+            [
+              24.0322826,
+              49.8357035
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/186048031",
+        "coordinates": [
+          24.0280884,
+          49.8428848
+        ],
+        "evidence": "parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0274769,
+              49.8427892
+            ],
+            [
+              24.027544,
+              49.8427993
+            ],
+            [
+              24.0276087,
+              49.8428091
+            ],
+            [
+              24.0277254,
+              49.8428268
+            ],
+            [
+              24.0285856,
+              49.8429642
+            ],
+            [
+              24.0286221,
+              49.8429678
+            ],
+            [
+              24.0286567,
+              49.8429671
+            ],
+            [
+              24.0287008,
+              49.8429636
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/228421143",
+        "coordinates": [
+          24.0283392,
+          49.8440224
+        ],
+        "evidence": "parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.028336,
+              49.8441966
+            ],
+            [
+              24.0283423,
+              49.8438482
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/234541347",
+        "coordinates": [
+          24.0295402,
+          49.8378972
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.029797,
+              49.8375858
+            ],
+            [
+              24.0297717,
+              49.8376238
+            ],
+            [
+              24.0295691,
+              49.8378651
+            ],
+            [
+              24.0292915,
+              49.8381733
+            ],
+            [
+              24.0292829,
+              49.8381829
+            ],
+            [
+              24.0292683,
+              49.8381958
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/23541090",
+        "coordinates": [
+          24.0221596,
+          49.8424566
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0222951,
+              49.8417915
+            ],
+            [
+              24.0222852,
+              49.8418305
+            ],
+            [
+              24.022034,
+              49.8430831
+            ],
+            [
+              24.0220313,
+              49.8430948
+            ],
+            [
+              24.022024,
+              49.8431216
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/24567348",
+        "coordinates": [
+          24.0320447,
+          49.8346611
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0317862,
+              49.8350852
+            ],
+            [
+              24.0318559,
+              49.8349341
+            ],
+            [
+              24.0319507,
+              49.8347881
+            ],
+            [
+              24.0319724,
+              49.8347548
+            ],
+            [
+              24.0321042,
+              49.834584
+            ],
+            [
+              24.0323934,
+              49.834306
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/24595231",
+        "coordinates": [
+          24.0312993,
+          49.8360652
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0309395,
+              49.836574
+            ],
+            [
+              24.0309645,
+              49.8365351
+            ],
+            [
+              24.0310829,
+              49.8363689
+            ],
+            [
+              24.0316322,
+              49.8355978
+            ],
+            [
+              24.0316595,
+              49.8355567
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/24595257",
+        "coordinates": [
+          24.0303984,
+          49.8359398
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0308181,
+              49.8354277
+            ],
+            [
+              24.0307944,
+              49.8354545
+            ],
+            [
+              24.0300033,
+              49.8364242
+            ],
+            [
+              24.0299827,
+              49.836455
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/32608459",
+        "coordinates": [
+          24.0364321,
+          49.8380234
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0351651,
+              49.8381707
+            ],
+            [
+              24.0351977,
+              49.8381671
+            ],
+            [
+              24.0352596,
+              49.8381603
+            ],
+            [
+              24.036886,
+              49.8379704
+            ],
+            [
+              24.0377042,
+              49.837949
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/39675336",
+        "coordinates": [
+          24.0331874,
+          49.8399443
+        ],
+        "evidence": "parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.032746,
+              49.8398226
+            ],
+            [
+              24.0328704,
+              49.8398569
+            ],
+            [
+              24.0336288,
+              49.8400659
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/39762750",
+        "coordinates": [
+          24.0385371,
+          49.842158
+        ],
+        "evidence": "parking:left:fee=yes",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0363502,
+              49.8419531
+            ],
+            [
+              24.0365345,
+              49.8418921
+            ],
+            [
+              24.0368029,
+              49.8419006
+            ],
+            [
+              24.0376844,
+              49.8420181
+            ],
+            [
+              24.0404205,
+              49.8424671
+            ],
+            [
+              24.0406612,
+              49.8425168
+            ],
+            [
+              24.0407222,
+              49.8425263
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/40955979",
+        "coordinates": [
+          24.0302975,
+          49.8443325
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0295633,
+              49.8443877
+            ],
+            [
+              24.0296214,
+              49.8443772
+            ],
+            [
+              24.0310326,
+              49.8442839
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/58261575",
+        "coordinates": [
+          24.0246744,
+          49.8452857
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0253089,
+              49.8452866
+            ],
+            [
+              24.0251496,
+              49.8452874
+            ],
+            [
+              24.0241707,
+              49.8452838
+            ],
+            [
+              24.0240398,
+              49.8452834
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/606120690",
+        "coordinates": [
+          24.027571,
+          49.8438469
+        ],
+        "evidence": "parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0283423,
+              49.8438482
+            ],
+            [
+              24.0269854,
+              49.8438459
+            ],
+            [
+              24.0269286,
+              49.8438456
+            ],
+            [
+              24.0267999,
+              49.84384
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/640145099",
+        "coordinates": [
+          24.0327281,
+          49.8441464
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0320411,
+              49.8442024
+            ],
+            [
+              24.033415,
+              49.8440903
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/641182017",
+        "coordinates": [
+          24.0239717,
+          49.8418237
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0247248,
+              49.8417055
+            ],
+            [
+              24.0246212,
+              49.8417267
+            ],
+            [
+              24.0240159,
+              49.841821
+            ],
+            [
+              24.0238526,
+              49.841831
+            ],
+            [
+              24.0235591,
+              49.8418199
+            ],
+            [
+              24.0232095,
+              49.841813
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/641814946",
+        "coordinates": [
+          24.0293578,
+          49.8374321
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.029797,
+              49.8375858
+            ],
+            [
+              24.0297487,
+              49.8375689
+            ],
+            [
+              24.0293042,
+              49.8374133
+            ],
+            [
+              24.0289246,
+              49.8372622
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/641816016",
+        "coordinates": [
+          24.0242088,
+          49.8398288
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0246288,
+              49.8395862
+            ],
+            [
+              24.0238462,
+              49.8400382
+            ],
+            [
+              24.0237878,
+              49.8400695
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/641819776",
+        "coordinates": [
+          24.0334031,
+          49.8336122
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0328173,
+              49.8339513
+            ],
+            [
+              24.0328435,
+              49.8339341
+            ],
+            [
+              24.0337179,
+              49.8334311
+            ],
+            [
+              24.0338176,
+              49.8333798
+            ],
+            [
+              24.0339733,
+              49.8333033
+            ],
+            [
+              24.0339986,
+              49.8332909
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/684421682",
+        "coordinates": [
+          24.0246696,
+          49.8421048
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0245993,
+              49.8425047
+            ],
+            [
+              24.0247337,
+              49.8417404
+            ],
+            [
+              24.0247248,
+              49.8417055
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/684421716",
+        "coordinates": [
+          24.0245689,
+          49.8426177
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0244813,
+              49.8426952
+            ],
+            [
+              24.0245688,
+              49.842618
+            ],
+            [
+              24.0245993,
+              49.8425047
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/78823640",
+        "coordinates": [
+          24.0328848,
+          49.8395694
+        ],
+        "evidence": "parking:condition:both=ticket; parking:condition:both=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0330132,
+              49.8393113
+            ],
+            [
+              24.0329821,
+              49.8393896
+            ],
+            [
+              24.0329777,
+              49.8394
+            ],
+            [
+              24.0327586,
+              49.8397997
+            ],
+            [
+              24.032746,
+              49.8398226
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/87125869",
+        "coordinates": [
+          24.0300757,
+          49.8370536
+        ],
+        "evidence": "parking:condition:right=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0303101,
+              49.836501
+            ],
+            [
+              24.0302996,
+              49.8365298
+            ],
+            [
+              24.0301255,
+              49.8369625
+            ],
+            [
+              24.029947,
+              49.8372894
+            ],
+            [
+              24.0298135,
+              49.8375565
+            ],
+            [
+              24.029797,
+              49.8375858
+            ]
+          ]
+        },
+        "access": "unknown"
+      },
+      {
+        "id": "way/991877915",
+        "coordinates": [
+          24.0361725,
+          49.8425217
+        ],
+        "evidence": "parking:condition:left=ticket",
+        "streetSegment": true,
+        "sourceGeometry": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              24.0363502,
+              49.8419531
+            ],
+            [
+              24.0362364,
+              49.8422956
+            ],
+            [
+              24.0360104,
+              49.8430952
+            ]
+          ]
+        },
+        "access": "unknown"
+      }
+    ],
+    "excluded": [
+      {
+        "id": "way/24567664",
+        "parent": "relation/3362858",
+        "reason": "Nested space / same facility / street intersects separately mapped facility; no extra marker"
+      },
+      {
+        "id": "way/641312704",
+        "parent": "relation/3362858",
+        "reason": "Nested space / same facility / street intersects separately mapped facility; no extra marker"
+      }
+    ],
+    "feeUpdatesForReview": [],
+    "afterCount": 2925,
+    "after": {
+      "repair": 223,
+      "parking": 2329,
+      "charging": 68,
+      "paid": 137,
+      "fuel": 168
     }
   }
 }
