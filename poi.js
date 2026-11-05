@@ -24,7 +24,6 @@ const DAILY_REQUEST_LIMIT = 30;
 const DAILY_COUNTER_KEY = "parking-map-overpass-daily";
 const empty = () => ({ type: "FeatureCollection", features: [] });
 const PARKING_CATEGORIES = ["parking", "paid"];
-const DEMO_OCCUPANCY_KEY = "parking-map-demo-occupancy";
 
 export function demoOccupancyIds(ids) {
   const ranked = [...new Set(ids)].map(id => {
@@ -150,17 +149,13 @@ export function boundsCovered(bounds, boxes) {
 
 export function setupPoi(map, boundary, Popup, onDestination, { cancelDestination = () => {} } = {}) {
   const status = document.querySelector("#poi-status");
-  const occupancyToggle = document.querySelector("#demo-occupancy");
-  const occupancyNotice = document.querySelector("#demo-occupancy-note");
   const buttons = [...document.querySelectorAll("[data-poi]")];
   const active = new Set();
   // Session-only demo choice. A future operator API must supply its own verified
   // booking result; neither this object nor fee tags assert a reserved space.
   let reservation;
-  let occupancyEnabled = false;
-  try { occupancyEnabled = localStorage.getItem(DEMO_OCCUPANCY_KEY) === "on"; } catch { /* Storage may be unavailable. */ }
   const occupiedIds = new Set();
-  const isDemoOccupied = id => occupancyEnabled && occupiedIds.has(id) && reservation?.id !== id;
+  const isDemoOccupied = id => occupiedIds.has(id);
   let localData = null;
   const canonicalId = id => localData?.metadata.osmIdAliases?.[id] ?? id;
   let localPromise, chargingPromise, chargingComplete = false, localError = false, chargingError = false;
@@ -603,17 +598,6 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
     button.addEventListener("click", click);
     return [button, click];
   });
-  function changeOccupancy() {
-    occupancyEnabled = occupancyToggle.checked;
-    try { localStorage.setItem(DEMO_OCCUPANCY_KEY, occupancyEnabled ? "on" : "off"); } catch { /* Keep the setting for this session. */ }
-    occupancyNotice.hidden = !occupancyEnabled;
-    popup?.remove();
-    showAvailable(eligible().filter(key => PARKING_CATEGORIES.includes(key)));
-  }
-  occupancyToggle.checked = occupancyEnabled;
-  occupancyNotice.hidden = !occupancyEnabled;
-  occupancyToggle.disabled = false;
-  occupancyToggle.addEventListener("change", changeOccupancy);
   listen("movestart", () => { revision += 1; controller?.abort(); clearTimeout(timer); clearTimeout(retryTimer); popup?.remove(); });
   listen("moveend", schedule);
   function dispose() {
@@ -623,8 +607,6 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
     reservation = undefined;
     handlers.forEach((args) => map.off(...args));
     clicks.forEach(([button, click]) => button.removeEventListener("click", click));
-    occupancyToggle.removeEventListener("change", changeOccupancy);
-    occupancyToggle.disabled = true;
     map.off("remove", dispose);
   }
   map.on("remove", dispose);

@@ -1,5 +1,5 @@
-import { setupPoi } from "./poi.js?v=20261105-demo-occupancy";
-import { setupNavigation } from "./navigation.js?v=20261105-demo-occupancy";
+import { setupPoi } from "./poi.js?v=20261105-always-demo";
+import { setupNavigation } from "./navigation.js?v=20261105-always-demo";
 import {
   LngLatBounds,
   Map as MapLibreMap,

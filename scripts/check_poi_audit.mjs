@@ -25,10 +25,10 @@ async function fixture(network,{outside=false,onDestination=()=>{},cancelDestina
   globalThis.setTimeout=(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:now+ms});return id;};
   globalThis.clearTimeout=id=>timers.delete(id);Date.now=()=>now;
   const advance=async ms=>{const end=now+ms;for(let count=0;count<100;count++){const next=[...timers].filter(([,v])=>v.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;timers.delete(next[0]);now=next[1].at;next[1].fn();await flush();if(count===99)throw Error('Unbounded timer loop');}now=end;await flush();};
-  const status=new Element(), toggle=new Element(), notice=new Element();
+  const status=new Element();
   const buttons=Object.fromEntries(['parking','paid','charging','fuel','repair'].map(key=>{const el=new Element();el.dataset={poi:key};return[key,el];}));
-  globalThis.document={querySelector:selector=>({'#demo-occupancy':toggle,'#demo-occupancy-note':notice}[selector]??status),querySelectorAll:()=>Object.values(buttons),createElement:()=>new Element()};
-  const saved=new Map();globalThis.localStorage={getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)};
+  globalThis.document={querySelector:()=>status,querySelectorAll:()=>Object.values(buttons),createElement:()=>new Element()};
+  const saved=new Map([['parking-map-demo-occupancy','off']]);globalThis.localStorage={getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)};
   const calls=[];globalThis.fetch=(url,options={})=>{calls.push({url,options});return network(url,options);};
   const sources=new Map(),layers=new Map([['outside-ukraine',{}]]),handlers=[];
   let bounds=outside?[30,49.7,30.1,49.9]:[23.9,49.7,24.1,49.9];
@@ -37,8 +37,7 @@ async function fixture(network,{outside=false,onDestination=()=>{},cancelDestina
   let popup;class Popup {setLngLat(){return this;}setDOMContent(content){this.content=content;return this;}addTo(){popup=this;return this;}remove(){this.removed=true;}}
   const instance=setupPoi(map,{geometry},Popup,onDestination,{cancelDestination});
   const data=key=>sources.get('parking-map-poi-'+key).data.features;
-  return {map,status,buttons,advance,calls,data,instance,sources,layers,handlers,fire,getPopup:()=>popup,move(box){fire('movestart');bounds=box;fire('moveend');},timers,
-    notice, setOccupancy(enabled){toggle.checked=enabled;toggle.listeners.get('change')();}};
+  return {map,status,buttons,advance,calls,data,instance,sources,layers,handlers,fire,getPopup:()=>popup,move(box){fire('movestart');bounds=box;fire('moveend');},timers};
 }
 try{
   const snapshot = JSON.parse(readFileSync(new URL('../data/lviv-poi.geojson', import.meta.url), 'utf8'));
@@ -51,7 +50,7 @@ try{
     console.log(key, {total: ids.length, gray: occupied.size, normal: ids.length - occupied.size});
   }
   {
-    const records=[osm(1,'parking'),osm(2,'paid',[24,49.8],{fee:'yes'}),osm(3,'charging'),osm(4,'fuel'),osm(5,'repair',[24,49.8],{amenity:undefined,shop:'car_repair'}),osm(6,'paid',[24.001,49.8],{charge:'20 UAH/hour'}),osm(7,'parking')];
+    const records=[osm(1,'parking'),osm(2,'paid',[24,49.8],{fee:'yes'}),osm(3,'charging'),osm(4,'fuel'),osm(5,'repair',[24,49.8],{amenity:undefined,shop:'car_repair'}),osm(6,'paid',[24.001,49.8],{charge:'20 UAH/hour'}),osm(7,'parking'),osm(8,'paid',[24.002,49.8],{fee:'yes'})];
     const destinations=[],cancelled=[];
     const f=await fixture(url=>Promise.resolve(response(url.includes('ocm')?{type:'FeatureCollection',features:[]}:local(records))),{onDestination:(...args)=>destinations.push(args),cancelDestination:owner=>cancelled.push(owner)});
     for(const key of Object.keys(f.buttons))f.buttons[key].click();await f.advance(700);
@@ -59,7 +58,8 @@ try{
     const all=root=>root.children.flatMap(c=>[c,...all(c)]);
     const open=record=>{f.fire('click','parking-map-poi-'+record.properties.category,{features:[record]});return f.getPopup().content;};
     for(const record of records){const p=open(record);assert.equal(!!find(p,'Забронювати'),['parking','paid'].includes(record.properties.category));}
-    let content=open(records[1]);find(content,'Забронювати').click();
+    const [firstPaid, nextPaid] = f.data('paid').filter(feature => !feature.properties.demoOccupied);
+    let content=open(firstPaid);find(content,'Забронювати').click();
     assert.equal(destinations.length,0,'First click only explains; no GPS or route before confirmation');
     assert.equal(f.data('paid').some(f=>f.properties.demoSelected),false);
     assert.ok(all(content).some(e=>e.textContent.includes('без резервування місця та оплати')));
@@ -67,27 +67,25 @@ try{
     content=f.getPopup().content;find(content,'Забронювати').click();const confirm=find(content,'Підтвердити демо-вибір');confirm.click();confirm.click();
     assert.equal(destinations.length,1,'Double confirmation cannot duplicate requests');
     const owner=destinations[0][2].owner;assert.ok(owner);
-    assert.deepEqual(destinations[0][0],records[1].geometry.coordinates);
+    assert.deepEqual(destinations[0][0],firstPaid.geometry.coordinates);
     assert.equal(f.data('paid').filter(f=>f.properties.demoSelected).length,1);
-    assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[1].id);
+    assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,firstPaid.id);
     assert.ok(f.layers.get('parking-map-poi-paid').paint['circle-color'].includes('#8A909C'));
     assert.ok(f.layers.get('parking-map-poi-paid').paint['circle-stroke-color'].includes('#C5CAD4'));
     const radius=JSON.stringify(f.layers.get('parking-map-poi-paid').paint['circle-radius']);
     assert.equal(f.layers.get('parking-map-poi-fuel').paint['circle-color'],'#F6A474');
     const callCount=f.calls.length,handlers=f.handlers.length;
     f.sources.clear();f.layers.clear();f.layers.set('outside-ukraine',{});f.instance.restoreStyle();f.instance.restoreStyle();
-    assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[1].id);assert.equal(f.calls.length,callCount);assert.equal(f.handlers.length,handlers);
+    assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,firstPaid.id);assert.equal(f.calls.length,callCount);assert.equal(f.handlers.length,handlers);
     assert.equal(JSON.stringify(f.layers.get('parking-map-poi-paid').paint['circle-radius']),radius);
-    f.buttons.paid.click();f.buttons.paid.click();await f.advance(700);assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[1].id);
-    content=open(records[1]);assert.ok(find(content,'Скасувати бронювання'));assert.ok(all(content).some(e=>e.textContent.includes('Фактичне місце не зарезервовано')));
-    content=open(records[5]);find(content,'Забронювати').click();find(content,'Підтвердити демо-вибір').click();
-    assert.equal(f.data('paid').filter(f=>f.properties.demoSelected).length,1);assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,records[5].id);
+    f.buttons.paid.click();f.buttons.paid.click();await f.advance(700);assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,firstPaid.id);
+    content=open(firstPaid);assert.ok(find(content,'Скасувати бронювання'));assert.ok(all(content).some(e=>e.textContent.includes('Фактичне місце не зарезервовано')));
+    content=open(nextPaid);find(content,'Забронювати').click();find(content,'Підтвердити демо-вибір').click();
+    assert.equal(f.data('paid').filter(f=>f.properties.demoSelected).length,1);assert.equal(f.data('paid').find(f=>f.properties.demoSelected).id,nextPaid.id);
     assert.notEqual(destinations[1][2].owner,owner);
-    content=open(records[5]);find(content,'Скасувати бронювання').click();assert.equal(f.data('paid').some(f=>f.properties.demoSelected),false);assert.equal(cancelled[0],destinations[1][2].owner);
+    content=open(nextPaid);find(content,'Скасувати бронювання').click();assert.equal(f.data('paid').some(f=>f.properties.demoSelected),false);assert.equal(cancelled[0],destinations[1][2].owner);
     assert.equal(destinations.length,2,'Cancellation never builds another route');
     const simulated = key => f.data(key).filter(feature => feature.properties.demoOccupied).map(feature => feature.id);
-    f.setOccupancy(true);
-    assert.equal(f.notice.hidden,false);
     const ordinaryOccupied = simulated('parking');
     const paidOccupied = simulated('paid');
     assert.equal(ordinaryOccupied.length,1);
@@ -99,22 +97,7 @@ try{
     assert.equal(find(content,'Забронювати').disabled,true);
     find(content,'Забронювати').click();
     assert.equal(find(content,'Підтвердити демо-вибір'),undefined);
-    f.setOccupancy(false);
-    assert.equal(f.notice.hidden,true);
-    assert.deepEqual(simulated('parking'),[]);
-    content = open(record);
-    find(content,'Забронювати').click();
-    find(content,'Підтвердити демо-вибір').click();
-    assert.equal(destinations.length,3);
-    f.setOccupancy(true);
-    assert.deepEqual(simulated('parking'),[]);
-    assert.equal(f.data('parking').find(item => item.id === record.id).properties.demoSelected,true);
-    f.sources.clear();f.layers.clear();f.layers.set('outside-ukraine',{});f.instance.restoreStyle();
-    assert.deepEqual(simulated('paid'),paidOccupied);
-    content = open(record);
-    find(content,'Скасувати бронювання').click();
-    assert.deepEqual(simulated('parking'),ordinaryOccupied);
-    assert.equal(cancelled[1],destinations[2][2].owner);
+    assert.equal(destinations.length,2,'An occupied marker cannot start booking');
     f.map.zoom = 14;
     f.move([23.95,49.75,24.05,49.85]);
     await f.advance(700);
@@ -125,13 +108,13 @@ try{
     assert.equal(find(content,'Забронювати').disabled,false);
     find(content,'Забронювати').click();
     find(content,'Підтвердити демо-вибір').click();
-    assert.equal(destinations.length,4);
+    assert.equal(destinations.length,3);
     content = open(available);
     find(content,'Скасувати бронювання').click();
     const restored = f.data('parking').find(item => item.id === available.id);
     assert.equal(restored.properties.demoSelected,false);
     assert.equal(restored.properties.demoOccupied,false);
-    assert.equal(f.calls.length,callCount,'Toggle and booking reuse loaded POIs');
+    assert.equal(f.calls.length,callCount,'Booking and rendering reuse loaded POIs');
     assert.equal(records.some(r=>Object.hasOwn(r.properties,'demoSelected')||Object.hasOwn(r.properties,'demoOccupied')),false,'Original cached data are unchanged');
     // A bogus paid category cannot grant a booking button without fee evidence.
     content=open(osm(9,'paid'));assert.equal(!!find(content,'Забронювати'),false);

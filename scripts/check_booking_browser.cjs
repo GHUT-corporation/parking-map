@@ -45,6 +45,7 @@ let browser, server, debugPage;
   browser = await chromium.launch({ ...(process.env.PARKING_CHROME_PATH ? { executablePath: process.env.PARKING_CHROME_PATH } : {}), headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl'] });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: 'reduce' });
   await context.addInitScript(() => {
+    localStorage.setItem('parking-map-demo-occupancy', 'off');
     window.__gps = { requests: 0, watches: 0, clears: 0 };
     const position = () => ({ coords: { longitude: 24.0297, latitude: 49.8397, accuracy: 12, speed: 0, heading: null }, timestamp: Date.now() });
     Object.defineProperty(navigator, 'geolocation', { value: {
@@ -77,20 +78,51 @@ let browser, server, debugPage;
   assert.equal((await page.evaluate(() => window.__gps.requests)), 0, 'No automatic GPS');
   for(const key of keys){await page.locator('[data-poi="'+key+'"]').click();await until(page,async k=>(await window.__map.getSource('parking-map-poi-'+k).getData()).features.length>0,key);}
   await page.evaluate(async()=>{const r=await fetch('https://api.maptiler.com/maps/streets-v4/style.json?key='+encodeURIComponent(window.PARKING_MAP_CONFIG.mapTilerKey));if(!r.ok)throw Error('Test base style unavailable');window.__auditBaseStyle=await r.json();});
-  // Real local paid POIs + actual MapLibre circles/popup; only GPS/routing are controlled.
-  const paid = data.features.filter(f => f.properties.category === 'paid' && f.geometry.coordinates[0] > 24.01 && f.geometry.coordinates[0] < 24.07 && f.geometry.coordinates[1] > 49.82 && f.geometry.coordinates[1] < 49.86);
+  const { demoOccupancyIds } = await import('../poi.js');
+  const parkingByCategory = Object.fromEntries(['parking', 'paid'].map(key => [key,
+    data.features.filter(feature => feature.properties.category === key),
+  ]));
+  const occupiedByCategory = Object.fromEntries(Object.entries(parkingByCategory).map(([key, features]) =>
+    [key, demoOccupancyIds(features.map(feature => feature.id))]));
+  const inCenter = ({ geometry: { coordinates: [lon, lat] } }) =>
+    lon > 24.01 && lon < 24.07 && lat > 49.82 && lat < 49.86;
+  const paid = parkingByCategory.paid.filter(feature => inCenter(feature) && !occupiedByCategory.paid.has(feature.id));
   assert.ok(paid.length >= 2);
-  const openPaid = async feature => {
+  async function centerMarker(feature, zoom = 17) {
     const key=feature.properties.category;
     await page.waitForTimeout(350); // Allow responsive layout/ResizeObserver after viewport changes.
-    await page.evaluate(p => { window.__map.resize(); window.__map.jumpTo({center:p,zoom:17}); }, feature.geometry.coordinates);
+    await page.evaluate(({center,zoom}) => { window.__map.resize(); window.__map.jumpTo({center,zoom}); }, {center:feature.geometry.coordinates,zoom});
     await until(page,()=>Math.abs(window.__map.getCanvas().getBoundingClientRect().width-window.__map.getContainer().getBoundingClientRect().width)<2);
     await until(page, async ({id,key}) => (await window.__map.getSource('parking-map-poi-'+key).getData()).features.some(f=>f.properties.osmId===id), {id:feature.id,key});
-    await until(page, ({p,key}) => window.__map.queryRenderedFeatures(window.__map.project(p),{layers:['parking-map-poi-'+key]}).length > 0, {p:feature.geometry.coordinates,key});
-    const point = await page.evaluate(p => { const q=window.__map.project(p),r=window.__map.getCanvas().getBoundingClientRect();return{x:q.x+r.left,y:q.y+r.top}; },feature.geometry.coordinates);
+    await until(page, ({p,key,id}) => window.__map.queryRenderedFeatures(window.__map.project(p),{layers:['parking-map-poi-'+key]}).some(item => item.properties.osmId === id), {p:feature.geometry.coordinates,key,id:feature.id});
+    return page.evaluate(p => { const q=window.__map.project(p),r=window.__map.getCanvas().getBoundingClientRect();return{x:q.x+r.left,y:q.y+r.top}; },feature.geometry.coordinates);
+  }
+  const openPaid = async feature => {
+    const point = await centerMarker(feature);
     await page.mouse.click(point.x,point.y);
     await page.locator('.poi-popup').waitFor();
   };
+  async function assertMarkerColor(feature, expected, zoom) {
+    const point = await centerMarker(feature, zoom);
+    const screenshot = await page.screenshot({ clip: { x: Math.round(point.x), y: Math.round(point.y), width: 1, height: 1 }, scale: 'css' });
+    const pixel = await page.evaluate(async png => {
+      const img = new Image();
+      img.src = 'data:image/png;base64,' + png;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3);
+    }, screenshot.toString('base64'));
+    // Circles have 95% opacity, so the underlying tile can shift RGB by up to 13.
+    assert.ok(pixel.every((value, i) => Math.abs(value - expected[i]) <= 15),
+      `Rendered pixel for ${feature.id} at zoom ${zoom}: ${pixel}, expected near ${expected}`);
+  }
+  async function assertNoDemoControls() {
+    const tools = page.locator('.tools-panel');
+    assert.equal(await tools.locator('input[type="checkbox"], .demo-occupancy, #demo-occupancy-note').count(), 0);
+    assert.doesNotMatch(await tools.textContent(), /Демо зайнятості|Симуляція зайнятості — не реальні дані/);
+  }
   const selected = async () => page.evaluate(async () => (await window.__map.getSource('parking-map-poi-paid').getData()).features.filter(f=>f.properties.demoSelected).map(f=>f.id));
   const confirmBooking = async () => { await page.getByRole('button',{name:'Забронювати',exact:true}).click();await page.getByRole('button',{name:'Підтвердити демо-вибір',exact:true}).click(); };
   for(const key of keys.filter(k=>!['parking','paid'].includes(k))){
@@ -104,6 +136,7 @@ let browser, server, debugPage;
   await page.evaluate(() => { window.__denyGPS = false; });
   for (const width of [1440,390,320]) {
     await page.setViewportSize({width,height:844});
+    await assertNoDemoControls();
     await openPaid(paid[0]);
     const routes=routeRequests;
     await page.getByRole('button',{name:'Забронювати',exact:true}).click();
@@ -144,57 +177,56 @@ let browser, server, debugPage;
   assert.deepEqual(await selected(),[paid[0].id],'Failed route does not fabricate or remove the demo choice');
   await openPaid(paid[0]);await page.getByRole('button',{name:'Скасувати бронювання',exact:true}).click();
   await page.locator('.maplibregl-popup-close-button').click();routingStatus=200;
-  const { demoOccupancyIds } = await import('../poi.js');
-  function simulatedSample(category) {
-    const ids = demoOccupancyIds(data.features.filter(feature => feature.properties.category === category).map(feature => feature.id));
-    return data.features.find(feature => {
+  function parkingSample(category, simulated) {
+    return parkingByCategory[category].find(feature => {
       const [lon, lat] = feature.geometry.coordinates;
-      return ids.has(feature.id) && lon > 24.01 && lon < 24.07 && lat > 49.82 && lat < 49.86 &&
+      return occupiedByCategory[category].has(feature.id) === simulated && inCenter(feature) &&
         !data.features.some(other => other.id !== feature.id &&
           Math.hypot(other.geometry.coordinates[0] - lon, other.geometry.coordinates[1] - lat) < .00016);
     });
   }
-  const ordinarySimulated = simulatedSample('parking');
-  const paidSimulated = simulatedSample('paid');
-  assert.ok(ordinarySimulated && paidSimulated);
-  const mode = page.getByRole('checkbox', { name: 'Демо зайнятості' });
+  const ordinarySimulated = parkingSample('parking', true);
+  const paidSimulated = parkingSample('paid', true);
+  const ordinaryAvailable = parkingSample('parking', false);
+  assert.ok(ordinarySimulated && paidSimulated && ordinaryAvailable);
   const booking = page.getByRole('button', { name: 'Забронювати', exact: true });
   const routeCount = routeRequests;
-  await mode.check();
-  assert.match(await page.locator('#demo-occupancy-note').innerText(), /Симуляція зайнятості/);
+  const gray = [0x8a, 0x90, 0x9c];
+  const teal = [0x53, 0xe6, 0xe1];
   for (const feature of [ordinarySimulated, paidSimulated]) {
+    await assertMarkerColor(feature, gray, 17);
     await openPaid(feature);
     assert.equal(await booking.isDisabled(), true);
     assert.equal(await page.locator('.popup-route-button').isEnabled(), true);
     assert.match(await page.locator('.popup-demo-note').innerText(), /Демонстраційно зайнято/);
     await page.locator('.maplibregl-popup-close-button').click();
   }
-  await mode.uncheck();
-  await openPaid(ordinarySimulated);
+  await assertMarkerColor(ordinarySimulated, gray, 18);
+  await assertMarkerColor(ordinaryAvailable, teal, 17);
+  await openPaid(ordinaryAvailable);
   assert.equal(await booking.isEnabled(), true);
   await confirmBooking();
   await until(page, () => document.querySelector('.workspace').dataset.navigationState === 'ready');
   assert.equal(routeRequests, routeCount + 1);
-  await page.locator('.mobile-tools-toggle').click();
-  await mode.check();
   assert.equal(await page.evaluate(async () => (await window.__map.getSource('navigation-route').getData()).features.length), 1);
-  await page.locator('.mobile-tools-toggle').click();
-  assert.equal(await page.locator('#demo-occupancy-note').isVisible(), true);
-  await openPaid(ordinarySimulated);
+  await openPaid(ordinaryAvailable);
   assert.equal(await page.getByRole('button', { name: 'Скасувати бронювання' }).isEnabled(), true);
   await page.getByRole('button', { name: 'Скасувати бронювання' }).click();
-  assert.equal(await booking.isDisabled(), true);
+  assert.equal(await booking.isEnabled(), true);
   assert.equal(await page.evaluate(async () => (await window.__map.getSource('navigation-route').getData()).features.length), 0);
   assert.equal(routeRequests, routeCount + 1);
+  await page.locator('.maplibregl-popup-close-button').click();
+  await assertMarkerColor(ordinaryAvailable, teal, 17);
   await page.setViewportSize({ width: 1440, height: 844 });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.__map?.getSource('parking-map-poi-parking'), null, { timeout: 60000 });
-  assert.equal(await mode.isChecked(), true);
+  await assertNoDemoControls();
   await page.locator('[data-poi="parking"]').click();
+  await assertMarkerColor(ordinarySimulated, gray, 17);
   await openPaid(ordinarySimulated);
   assert.equal(await booking.isDisabled(), true);
   assert.deepEqual(errors.filter(e=>!/403/.test(e)),[]);
-  console.log('Demo booking PASS: 1440/390/320px, both parking categories, occupancy toggle, persisted mode, automatic route, cancellation/ownership, style reload, HTTP 403');
+  console.log('Demo booking PASS: 1440/390/320px, both parking categories, rendered gray pixels across zoom and reload with legacy off value, automatic route, cancellation/ownership, style reload, HTTP 403');
   assert.ok(warnings.every(w=>!/Expected value|could not be loaded|SDF/i.test(w)),'Style warnings: '+JSON.stringify(warnings));
   console.log(JSON.stringify({result:'PASS',routes:routeRequests,localRequests,overpassRequests,gps:await page.evaluate(()=>window.__gps),warnings,screenshots:output}));
 })().catch(async error=>{if(debugPage)await debugPage.screenshot({path:path.join(output,'booking-failure.png')}).catch(()=>{});console.error('FAIL:',redact(error.stack||error.message));process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));});

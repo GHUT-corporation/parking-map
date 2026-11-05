@@ -188,7 +188,9 @@ let browser, server;
   assert.deepEqual(errors, []);
   assert.ok(warnings.every(w => !/Expected value|could not be loaded|SDF/i.test(w)), 'No style expression / sprite / SDF warnings: '+JSON.stringify(warnings));
   // Real local paid POIs + actual MapLibre circles/popup; only GPS/routing are controlled.
-  const paid = data.features.filter(f => f.properties.category === 'paid' && f.geometry.coordinates[0] > 24.01 && f.geometry.coordinates[0] < 24.07 && f.geometry.coordinates[1] > 49.82 && f.geometry.coordinates[1] < 49.86);
+  const { demoOccupancyIds } = await import('../poi.js');
+  const occupiedPaid = demoOccupancyIds(data.features.filter(feature => feature.properties.category === 'paid').map(feature => feature.id));
+  const paid = data.features.filter(f => f.properties.category === 'paid' && !occupiedPaid.has(f.id) && f.geometry.coordinates[0] > 24.01 && f.geometry.coordinates[0] < 24.07 && f.geometry.coordinates[1] > 49.82 && f.geometry.coordinates[1] < 49.86);
   assert.ok(paid.length >= 2);
   const openPaid = async feature => {
     await page.waitForTimeout(350);
