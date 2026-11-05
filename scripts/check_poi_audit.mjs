@@ -1,6 +1,7 @@
 // Deterministic POI integration tests; never contact a public API.
 import assert from 'node:assert/strict';
-import { setupPoi, toFeatures } from '../poi.js';
+import { readFileSync } from 'node:fs';
+import { demoOccupancyIds, setupPoi, toFeatures } from '../poi.js';
 
 const geometry = {type:'Polygon',coordinates:[[[20,44],[42,44],[42,54],[20,54],[20,44]]]};
 const osm = (id, key='fuel', p=[24,49.8], extra={}) => ({type:'Feature',id:'node/'+id,geometry:{type:'Point',coordinates:p},properties:{osmId:'node/'+id,category:key,amenity:key==='fuel'?'fuel':key==='charging'?'charging_station':'parking',...extra}});
@@ -24,8 +25,9 @@ async function fixture(network,{outside=false,onDestination=()=>{},cancelDestina
   globalThis.setTimeout=(fn,ms)=>{const id=++serial;timers.set(id,{fn,at:now+ms});return id;};
   globalThis.clearTimeout=id=>timers.delete(id);Date.now=()=>now;
   const advance=async ms=>{const end=now+ms;for(let count=0;count<100;count++){const next=[...timers].filter(([,v])=>v.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;timers.delete(next[0]);now=next[1].at;next[1].fn();await flush();if(count===99)throw Error('Unbounded timer loop');}now=end;await flush();};
-  const status=new Element(), buttons=Object.fromEntries(['parking','paid','charging','fuel','repair'].map(key=>{const el=new Element();el.dataset={poi:key};return[key,el];}));
-  globalThis.document={querySelector:()=>status,querySelectorAll:()=>Object.values(buttons),createElement:()=>new Element()};
+  const status=new Element(), toggle=new Element(), notice=new Element();
+  const buttons=Object.fromEntries(['parking','paid','charging','fuel','repair'].map(key=>{const el=new Element();el.dataset={poi:key};return[key,el];}));
+  globalThis.document={querySelector:selector=>({'#demo-occupancy':toggle,'#demo-occupancy-note':notice}[selector]??status),querySelectorAll:()=>Object.values(buttons),createElement:()=>new Element()};
   const saved=new Map();globalThis.localStorage={getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)};
   const calls=[];globalThis.fetch=(url,options={})=>{calls.push({url,options});return network(url,options);};
   const sources=new Map(),layers=new Map([['outside-ukraine',{}]]),handlers=[];
@@ -35,18 +37,28 @@ async function fixture(network,{outside=false,onDestination=()=>{},cancelDestina
   let popup;class Popup {setLngLat(){return this;}setDOMContent(content){this.content=content;return this;}addTo(){popup=this;return this;}remove(){this.removed=true;}}
   const instance=setupPoi(map,{geometry},Popup,onDestination,{cancelDestination});
   const data=key=>sources.get('parking-map-poi-'+key).data.features;
-  return {map,status,buttons,advance,calls,data,instance,sources,layers,handlers,fire,getPopup:()=>popup,move(box){fire('movestart');bounds=box;fire('moveend');},timers};
+  return {map,status,buttons,advance,calls,data,instance,sources,layers,handlers,fire,getPopup:()=>popup,move(box){fire('movestart');bounds=box;fire('moveend');},timers,
+    notice, setOccupancy(enabled){toggle.checked=enabled;toggle.listeners.get('change')();}};
 }
 try{
+  const snapshot = JSON.parse(readFileSync(new URL('../data/lviv-poi.geojson', import.meta.url), 'utf8'));
+  for (const key of ['parking', 'paid']) {
+    const ids = snapshot.features.filter(feature => feature.properties.category === key).map(feature => feature.id);
+    const occupied = demoOccupancyIds(ids);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.equal(occupied.size, Math.round(ids.length * .33));
+    assert.deepEqual([...occupied], [...demoOccupancyIds([...ids].reverse().concat(ids[0]))]);
+    console.log(key, {total: ids.length, gray: occupied.size, normal: ids.length - occupied.size});
+  }
   {
-    const records=[osm(1,'parking'),osm(2,'paid',[24,49.8],{fee:'yes'}),osm(3,'charging'),osm(4,'fuel'),osm(5,'repair',[24,49.8],{amenity:undefined,shop:'car_repair'}),osm(6,'paid',[24.001,49.8],{charge:'20 UAH/hour'})];
+    const records=[osm(1,'parking'),osm(2,'paid',[24,49.8],{fee:'yes'}),osm(3,'charging'),osm(4,'fuel'),osm(5,'repair',[24,49.8],{amenity:undefined,shop:'car_repair'}),osm(6,'paid',[24.001,49.8],{charge:'20 UAH/hour'}),osm(7,'parking')];
     const destinations=[],cancelled=[];
     const f=await fixture(url=>Promise.resolve(response(url.includes('ocm')?{type:'FeatureCollection',features:[]}:local(records))),{onDestination:(...args)=>destinations.push(args),cancelDestination:owner=>cancelled.push(owner)});
     for(const key of Object.keys(f.buttons))f.buttons[key].click();await f.advance(700);
     const find=(root,text)=>root.children.flatMap(c=>[c,...all(c)]).find(c=>c.textContent===text);
     const all=root=>root.children.flatMap(c=>[c,...all(c)]);
     const open=record=>{f.fire('click','parking-map-poi-'+record.properties.category,{features:[record]});return f.getPopup().content;};
-    for(const record of records){const p=open(record);assert.equal(!!find(p,'Забронювати'),record.properties.category==='paid');}
+    for(const record of records){const p=open(record);assert.equal(!!find(p,'Забронювати'),['parking','paid'].includes(record.properties.category));}
     let content=open(records[1]);find(content,'Забронювати').click();
     assert.equal(destinations.length,0,'First click only explains; no GPS or route before confirmation');
     assert.equal(f.data('paid').some(f=>f.properties.demoSelected),false);
@@ -73,7 +85,54 @@ try{
     assert.notEqual(destinations[1][2].owner,owner);
     content=open(records[5]);find(content,'Скасувати бронювання').click();assert.equal(f.data('paid').some(f=>f.properties.demoSelected),false);assert.equal(cancelled[0],destinations[1][2].owner);
     assert.equal(destinations.length,2,'Cancellation never builds another route');
-    assert.equal(records.some(r=>Object.hasOwn(r.properties,'demoSelected')),false,'Original cached data are unchanged');
+    const simulated = key => f.data(key).filter(feature => feature.properties.demoOccupied).map(feature => feature.id);
+    f.setOccupancy(true);
+    assert.equal(f.notice.hidden,false);
+    const ordinaryOccupied = simulated('parking');
+    const paidOccupied = simulated('paid');
+    assert.equal(ordinaryOccupied.length,1);
+    assert.equal(paidOccupied.length,1);
+    const record = records.find(item => item.id === ordinaryOccupied[0]);
+    content = open(record);
+    assert.ok(all(content).some(e=>e.textContent.includes('Демонстраційно зайнято')));
+    assert.ok(find(content,'Прокласти маршрут'));
+    assert.equal(find(content,'Забронювати').disabled,true);
+    find(content,'Забронювати').click();
+    assert.equal(find(content,'Підтвердити демо-вибір'),undefined);
+    f.setOccupancy(false);
+    assert.equal(f.notice.hidden,true);
+    assert.deepEqual(simulated('parking'),[]);
+    content = open(record);
+    find(content,'Забронювати').click();
+    find(content,'Підтвердити демо-вибір').click();
+    assert.equal(destinations.length,3);
+    f.setOccupancy(true);
+    assert.deepEqual(simulated('parking'),[]);
+    assert.equal(f.data('parking').find(item => item.id === record.id).properties.demoSelected,true);
+    f.sources.clear();f.layers.clear();f.layers.set('outside-ukraine',{});f.instance.restoreStyle();
+    assert.deepEqual(simulated('paid'),paidOccupied);
+    content = open(record);
+    find(content,'Скасувати бронювання').click();
+    assert.deepEqual(simulated('parking'),ordinaryOccupied);
+    assert.equal(cancelled[1],destinations[2][2].owner);
+    f.map.zoom = 14;
+    f.move([23.95,49.75,24.05,49.85]);
+    await f.advance(700);
+    assert.deepEqual(simulated('parking'),ordinaryOccupied);
+    assert.deepEqual(simulated('paid'),paidOccupied);
+    const available = records.find(item => item.properties.category === 'parking' && item.id !== record.id);
+    content = open(available);
+    assert.equal(find(content,'Забронювати').disabled,false);
+    find(content,'Забронювати').click();
+    find(content,'Підтвердити демо-вибір').click();
+    assert.equal(destinations.length,4);
+    content = open(available);
+    find(content,'Скасувати бронювання').click();
+    const restored = f.data('parking').find(item => item.id === available.id);
+    assert.equal(restored.properties.demoSelected,false);
+    assert.equal(restored.properties.demoOccupied,false);
+    assert.equal(f.calls.length,callCount,'Toggle and booking reuse loaded POIs');
+    assert.equal(records.some(r=>Object.hasOwn(r.properties,'demoSelected')||Object.hasOwn(r.properties,'demoOccupied')),false,'Original cached data are unchanged');
     // A bogus paid category cannot grant a booking button without fee evidence.
     content=open(osm(9,'paid'));assert.equal(!!find(content,'Забронювати'),false);
     f.instance.dispose();assert.equal(f.handlers.length,0);

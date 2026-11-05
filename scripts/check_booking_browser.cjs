@@ -93,7 +93,7 @@ let browser, server, debugPage;
   };
   const selected = async () => page.evaluate(async () => (await window.__map.getSource('parking-map-poi-paid').getData()).features.filter(f=>f.properties.demoSelected).map(f=>f.id));
   const confirmBooking = async () => { await page.getByRole('button',{name:'Забронювати',exact:true}).click();await page.getByRole('button',{name:'Підтвердити демо-вибір',exact:true}).click(); };
-  for(const key of keys.filter(k=>k!=='paid')){
+  for(const key of keys.filter(k=>!['parking','paid'].includes(k))){
     const feature=data.features.find(f=>f.properties.category===key&&f.geometry.coordinates[0]>24.01&&f.geometry.coordinates[0]<24.07&&f.geometry.coordinates[1]>49.82&&f.geometry.coordinates[1]<49.86);
     assert.ok(feature);await openPaid(feature);
     assert.equal(await page.getByRole('button',{name:'Забронювати',exact:true}).count(),0);
@@ -144,8 +144,57 @@ let browser, server, debugPage;
   assert.deepEqual(await selected(),[paid[0].id],'Failed route does not fabricate or remove the demo choice');
   await openPaid(paid[0]);await page.getByRole('button',{name:'Скасувати бронювання',exact:true}).click();
   await page.locator('.maplibregl-popup-close-button').click();routingStatus=200;
+  const { demoOccupancyIds } = await import('../poi.js');
+  function simulatedSample(category) {
+    const ids = demoOccupancyIds(data.features.filter(feature => feature.properties.category === category).map(feature => feature.id));
+    return data.features.find(feature => {
+      const [lon, lat] = feature.geometry.coordinates;
+      return ids.has(feature.id) && lon > 24.01 && lon < 24.07 && lat > 49.82 && lat < 49.86 &&
+        !data.features.some(other => other.id !== feature.id &&
+          Math.hypot(other.geometry.coordinates[0] - lon, other.geometry.coordinates[1] - lat) < .00016);
+    });
+  }
+  const ordinarySimulated = simulatedSample('parking');
+  const paidSimulated = simulatedSample('paid');
+  assert.ok(ordinarySimulated && paidSimulated);
+  const mode = page.getByRole('checkbox', { name: 'Демо зайнятості' });
+  const booking = page.getByRole('button', { name: 'Забронювати', exact: true });
+  const routeCount = routeRequests;
+  await mode.check();
+  assert.match(await page.locator('#demo-occupancy-note').innerText(), /Симуляція зайнятості/);
+  for (const feature of [ordinarySimulated, paidSimulated]) {
+    await openPaid(feature);
+    assert.equal(await booking.isDisabled(), true);
+    assert.equal(await page.locator('.popup-route-button').isEnabled(), true);
+    assert.match(await page.locator('.popup-demo-note').innerText(), /Демонстраційно зайнято/);
+    await page.locator('.maplibregl-popup-close-button').click();
+  }
+  await mode.uncheck();
+  await openPaid(ordinarySimulated);
+  assert.equal(await booking.isEnabled(), true);
+  await confirmBooking();
+  await until(page, () => document.querySelector('.workspace').dataset.navigationState === 'ready');
+  assert.equal(routeRequests, routeCount + 1);
+  await page.locator('.mobile-tools-toggle').click();
+  await mode.check();
+  assert.equal(await page.evaluate(async () => (await window.__map.getSource('navigation-route').getData()).features.length), 1);
+  await page.locator('.mobile-tools-toggle').click();
+  assert.equal(await page.locator('#demo-occupancy-note').isVisible(), true);
+  await openPaid(ordinarySimulated);
+  assert.equal(await page.getByRole('button', { name: 'Скасувати бронювання' }).isEnabled(), true);
+  await page.getByRole('button', { name: 'Скасувати бронювання' }).click();
+  assert.equal(await booking.isDisabled(), true);
+  assert.equal(await page.evaluate(async () => (await window.__map.getSource('navigation-route').getData()).features.length), 0);
+  assert.equal(routeRequests, routeCount + 1);
+  await page.setViewportSize({ width: 1440, height: 844 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => !!window.__map?.getSource('parking-map-poi-parking'), null, { timeout: 60000 });
+  assert.equal(await mode.isChecked(), true);
+  await page.locator('[data-poi="parking"]').click();
+  await openPaid(ordinarySimulated);
+  assert.equal(await booking.isDisabled(), true);
   assert.deepEqual(errors.filter(e=>!/403/.test(e)),[]);
-  console.log('Demo booking PASS: 1440/390/320px, real paid POIs, confirmation, gray paint/data, automatic route, cancellation/ownership, switch, style reload, HTTP 403');
+  console.log('Demo booking PASS: 1440/390/320px, both parking categories, occupancy toggle, persisted mode, automatic route, cancellation/ownership, style reload, HTTP 403');
   assert.ok(warnings.every(w=>!/Expected value|could not be loaded|SDF/i.test(w)),'Style warnings: '+JSON.stringify(warnings));
   console.log(JSON.stringify({result:'PASS',routes:routeRequests,localRequests,overpassRequests,gps:await page.evaluate(()=>window.__gps),warnings,screenshots:output}));
 })().catch(async error=>{if(debugPage)await debugPage.screenshot({path:path.join(output,'booking-failure.png')}).catch(()=>{});console.error('FAIL:',redact(error.stack||error.message));process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));});

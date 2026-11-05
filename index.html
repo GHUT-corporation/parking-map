@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=20261103-paid-booking" />
+    <link rel="stylesheet" href="./styles.css?v=20261105-demo-occupancy" />
   </head>
   <body>
     <main class="app-shell">
@@ -74,6 +74,10 @@
               <span class="tool-label">СТО</span><span class="tool-chevron">›</span>
             </button>
           </nav>
+          <div class="demo-occupancy">
+            <label><input id="demo-occupancy" type="checkbox" aria-describedby="demo-occupancy-note" disabled> Демо зайнятості</label>
+            <span id="demo-occupancy-note" role="status" hidden>Симуляція зайнятості — не реальні дані</span>
+          </div>
           <p id="poi-status" class="poi-status" role="status" aria-live="polite">Очікування карти…</p>
           <div class="tools-footer"><span class="footer-sparkle">✳</span><span>Твій простір для зручних поїздок</span></div>
         </aside>
@@ -81,6 +85,6 @@
 
     </main>
     <script src="./map-config.js"></script>
-    <script type="module" src="./script.js?v=20261103-paid-booking"></script>
+    <script type="module" src="./script.js?v=20261105-demo-occupancy"></script>
   </body>
 </html>

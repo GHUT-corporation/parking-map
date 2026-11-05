@@ -1,4 +1,4 @@
-import { insideUkraine } from "./poi.js?v=20261103-paid-booking";
+import { insideUkraine } from "./poi.js?v=20261105-demo-occupancy";
 
 const ROUTING_URL = "https://api.geoapify.com/v1/routing";
 const empty = { type: "FeatureCollection", features: [] };

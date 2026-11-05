@@ -23,6 +23,18 @@ const ENDPOINT = "https://overpass-api.de/api/interpreter";
 const DAILY_REQUEST_LIMIT = 30;
 const DAILY_COUNTER_KEY = "parking-map-overpass-daily";
 const empty = () => ({ type: "FeatureCollection", features: [] });
+const PARKING_CATEGORIES = ["parking", "paid"];
+const DEMO_OCCUPANCY_KEY = "parking-map-demo-occupancy";
+
+export function demoOccupancyIds(ids) {
+  const ranked = [...new Set(ids)].map(id => {
+    let hash = 2166136261;
+    for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+    return { id, score: hash >>> 0 };
+  });
+  ranked.sort((a, b) => a.score - b.score || (a.id < b.id ? -1 : 1));
+  return new Set(ranked.slice(0, Math.round(ranked.length * 0.33)).map(entry => entry.id));
+}
 
 export function insideUkraine(point, geometry) {
   if (!Array.isArray(point) || point.length !== 2 || !point.every(Number.isFinite) ||
@@ -138,11 +150,17 @@ export function boundsCovered(bounds, boxes) {
 
 export function setupPoi(map, boundary, Popup, onDestination, { cancelDestination = () => {} } = {}) {
   const status = document.querySelector("#poi-status");
+  const occupancyToggle = document.querySelector("#demo-occupancy");
+  const occupancyNotice = document.querySelector("#demo-occupancy-note");
   const buttons = [...document.querySelectorAll("[data-poi]")];
   const active = new Set();
   // Session-only demo choice. A future operator API must supply its own verified
   // booking result; neither this object nor fee tags assert a reserved space.
   let reservation;
+  let occupancyEnabled = false;
+  try { occupancyEnabled = localStorage.getItem(DEMO_OCCUPANCY_KEY) === "on"; } catch { /* Storage may be unavailable. */ }
+  const occupiedIds = new Set();
+  const isDemoOccupied = id => occupancyEnabled && occupiedIds.has(id) && reservation?.id !== id;
   let localData = null;
   const canonicalId = id => localData?.metadata.osmIdAliases?.[id] ?? id;
   let localPromise, chargingPromise, chargingComplete = false, localError = false, chargingError = false;
@@ -177,6 +195,10 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
       const valid = [...new Map(data.features.filter(f => validFeature(f)).map(f => [f.id, f])).values()];
       for (const key of Object.keys(CATEGORIES)) {
         localByCategory.set(key, valid.filter((feature) => feature.properties.category === key));
+      }
+      for (const key of PARKING_CATEGORIES) {
+        const ids = localByCategory.get(key).map(feature => canonicalId(feature.id));
+        for (const id of demoOccupancyIds(ids)) occupiedIds.add(id);
       }
     })
     .catch(() => { localError = true; });
@@ -215,6 +237,7 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
     if (disposed) return;
     for (const [key, category] of Object.entries(CATEGORIES)) {
     const id = sourceId(key);
+    const parking = PARKING_CATEGORIES.includes(key);
     if (!map.getSource(id)) map.addSource(id, {
       type: "geojson", data: empty(),
       attribution: 'POI © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>' + (key === "charging" ? ' · <a href="https://openchargemap.org" target="_blank" rel="noopener">Open Charge Map contributors</a> (CC BY 4.0)' : ''),
@@ -224,8 +247,8 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
       layout: { visibility: "none" },
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 6, 13, 7, 16, 8, 20, 10],
-        "circle-color": key === "paid" ? ["case", ["==", ["get", "demoSelected"], true], "#8A909C", category.color] : category.color,
-        "circle-stroke-color": key === "paid" ? ["case", ["==", ["get", "demoSelected"], true], "#C5CAD4", "#10182C"] : "#10182C",
+        "circle-color": parking ? ["case", ["any", ["==", ["get", "demoSelected"], true], ["==", ["get", "demoOccupied"], true]], "#8A909C", category.color] : category.color,
+        "circle-stroke-color": parking ? ["case", ["==", ["get", "demoSelected"], true], "#C5CAD4", "#10182C"] : "#10182C",
         "circle-stroke-width": 2, "circle-opacity": 0.95,
       },
     }, "outside-ukraine");
@@ -240,8 +263,11 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
       popup?.remove();
       const props = feature.properties;
       const confirmedPaid = key === "paid" && categoryFor(props) === "paid";
+      const bookableParking = confirmedPaid || (key === "parking" && categoryFor(props) === "parking");
+      const id = canonicalId(props.osmId);
       const streetParking = confirmedPaid && props.highway && !["parking", "parking_space"].includes(props.amenity) && props.site !== "parking";
-      const selected = confirmedPaid && reservation?.id === canonicalId(props.osmId);
+      const selected = bookableParking && reservation?.id === id;
+      const occupied = bookableParking && isDemoOccupied(id);
       const content = document.createElement("div");
       const title = document.createElement("strong");
       title.textContent = props.name || category.label;
@@ -293,8 +319,8 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
       source.textContent = props.sourceName ? `Джерело: ${props.sourceName} · ${props.sourceId} · ${props.license}` : `Джерело: OSM ${props.osmId}`;
       content.append(source);
       const routeButton = document.createElement("button");
-      const actions = confirmedPaid ? document.createElement("div") : content;
-      if (confirmedPaid) actions.className = "popup-parking-actions";
+      const actions = bookableParking ? document.createElement("div") : content;
+      if (bookableParking) actions.className = "popup-parking-actions";
       routeButton.type = "button";
       routeButton.className = "popup-route-button";
       routeButton.textContent = "Прокласти маршрут";
@@ -304,19 +330,20 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
         popup?.remove();
       });
       actions.append(routeButton);
-      if (confirmedPaid) {
+      if (bookableParking) {
         const demo = document.createElement("p");
         demo.className = "popup-demo-note";
-        demo.textContent = selected
-          ? "Демо-вибір для вас. Фактичне місце не зарезервовано; наявність вільних місць невідома."
-          : "Доступний демонстраційний вибір. Фактичне місце не резервується.";
+        demo.textContent = "Доступний демонстраційний вибір. Фактична доступність невідома.";
+        if (occupied) demo.textContent = "Демонстраційно зайнято. Це симуляція карти. Даних про зайнятість від оператора немає.";
+        if (selected) demo.textContent = "Демо-вибір для вас. Фактичне місце не зарезервовано. Наявність вільних місць невідома.";
         actions.append(demo);
         const bookingButton = document.createElement("button");
         bookingButton.type = "button";
         bookingButton.className = "popup-booking-button";
         bookingButton.textContent = selected ? "Скасувати бронювання" : "Забронювати";
+        bookingButton.disabled = occupied;
         bookingButton.addEventListener("click", () => {
-          if (disposed) return;
+          if (disposed || isDemoOccupied(id)) return;
           if (selected) {
             const owner = reservation?.owner;
             reservation = undefined;
@@ -343,12 +370,12 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
           dismiss.className = "popup-booking-dismiss";
           dismiss.textContent = "Назад";
           confirm.addEventListener("click", () => {
-            if (disposed || confirm.disabled) return;
+            if (disposed || confirm.disabled || isDemoOccupied(id)) return;
             confirm.disabled = true;
             // Identity token prevents cancelling a later ordinary POI/map route,
             // even when it has exactly the same destination coordinates.
             const owner = {};
-            reservation = { id: canonicalId(props.osmId), owner };
+            reservation = { id, owner };
             showAvailable(eligible());
             onDestination(feature.geometry.coordinates, props.name || category.label, { owner });
             popup?.remove();
@@ -403,9 +430,14 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
           combined.set(id, feature);
         }
       }
-      const features = [...combined.values()].map(feature => key === "paid" ? {
-        ...feature, properties: { ...feature.properties, demoSelected: reservation?.id === canonicalId(feature.properties.osmId) },
-      } : feature);
+      const features = [...combined.values()].map(feature => {
+        if (!PARKING_CATEGORIES.includes(key)) return feature;
+        const id = canonicalId(feature.properties.osmId);
+        return {
+          ...feature,
+          properties: { ...feature.properties, demoSelected: reservation?.id === id, demoOccupied: isDemoOccupied(id) },
+        };
+      });
       map.getSource(sourceId(key))?.setData({ type: "FeatureCollection", features });
       count += combined.size;
     }
@@ -571,6 +603,17 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
     button.addEventListener("click", click);
     return [button, click];
   });
+  function changeOccupancy() {
+    occupancyEnabled = occupancyToggle.checked;
+    try { localStorage.setItem(DEMO_OCCUPANCY_KEY, occupancyEnabled ? "on" : "off"); } catch { /* Keep the setting for this session. */ }
+    occupancyNotice.hidden = !occupancyEnabled;
+    popup?.remove();
+    showAvailable(eligible().filter(key => PARKING_CATEGORIES.includes(key)));
+  }
+  occupancyToggle.checked = occupancyEnabled;
+  occupancyNotice.hidden = !occupancyEnabled;
+  occupancyToggle.disabled = false;
+  occupancyToggle.addEventListener("change", changeOccupancy);
   listen("movestart", () => { revision += 1; controller?.abort(); clearTimeout(timer); clearTimeout(retryTimer); popup?.remove(); });
   listen("moveend", schedule);
   function dispose() {
@@ -580,6 +623,8 @@ export function setupPoi(map, boundary, Popup, onDestination, { cancelDestinatio
     reservation = undefined;
     handlers.forEach((args) => map.off(...args));
     clicks.forEach(([button, click]) => button.removeEventListener("click", click));
+    occupancyToggle.removeEventListener("change", changeOccupancy);
+    occupancyToggle.disabled = true;
     map.off("remove", dispose);
   }
   map.on("remove", dispose);
